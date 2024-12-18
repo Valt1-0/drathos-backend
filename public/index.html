@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bienvenue sur l'API Drathos</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f8f9fa;
+        color: #333;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+      }
+      header {
+        background-color: #343a40;
+        color: white;
+        padding: 20px 0;
+      }
+      main {
+        padding: 20px;
+      }
+      h1 {
+        margin: 0;
+      }
+      .status-container {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        display: inline-block;
+        margin-top: 20px;
+        padding: 20px;
+        text-align: center;
+        max-width: 600px;
+        width: 100%;
+      }
+      .status-container h2 {
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Bienvenue sur l'API Drathos</h1>
+    </header>
+    <main>
+      <div class="status-container">
+        <h2>Temps de fonctionnement: <span id="uptime"></span></h2>
+      </div>
+    </main>
+    <script>
+      async function getServerStatus() {
+        try {
+          let response = await fetch("/api/server/status");
+          let data = await response.json();
+
+          document.getElementById("uptime").innerText = data.uptime;
+        } catch (error) {
+          console.error(error);
+          document.getElementById("uptime").innerText =
+            "Erreur lors de la récupération du temps de fonctionnement";
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        getServerStatus();
+      });
+    </script>
+  </body>
+</html>
