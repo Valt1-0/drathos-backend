@@ -1,9 +1,10 @@
-const jwt = require("jsonwebtoken");
-const User = require("../models/userModel");
+import jwt from "jsonwebtoken";
+import User from "../models/userModel.js";
+
 const JWT_TOKEN = process.env.JWT_TOKEN || console.log("JWT_TOKEN not found");
 
 // Register
-exports.register = async (req, res) => {
+export const register = async (req, res) => {
   const { username, password } = req.body;
 
   console.log("Registering user: ", username);
@@ -46,7 +47,7 @@ exports.register = async (req, res) => {
 };
 
 // Login
-exports.login = async (req, res) => {
+export const login = async (req, res) => {
   const { username, password } = req.body;
 
   try {

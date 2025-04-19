@@ -1,10 +1,10 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 mongoose.set("strictQuery", false);
-require("dotenv").config();
+import "dotenv/config.js";
 
 const { MONGODB_URI } = process.env;
 
-exports.connect = async () => {
+export const connect = async () => {
   await mongoose
     .connect(MONGODB_URI)
     .then(() => {

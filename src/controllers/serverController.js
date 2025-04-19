@@ -7,7 +7,7 @@ const formatUptime = (uptime) => {
   return `${days}d ${hours}h ${minutes}m ${seconds}s`;
 };
 
-exports.getServerStatus = async (req, res) => {
+export const getServerStatus = async (req, res) => {
   try {
     const uptime = process.uptime();
     const status = {

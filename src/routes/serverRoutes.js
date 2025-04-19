@@ -1,8 +1,7 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const { getServerStatus } = require("../controllers/serverController");
+import { getServerStatus } from "../controllers/serverController.js";
 
-// Example route
 router.get("/status", getServerStatus);
 
-module.exports = router;
+export default router;
