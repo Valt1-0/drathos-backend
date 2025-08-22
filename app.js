@@ -10,6 +10,8 @@ import serverRoute from "./src/routes/serverRoutes.js";
 import userRoute from "./src/routes/userRoutes.js";
 import serverGameRoute from "./src/routes/serverGameRoutes.js";
 import reviewRoute from "./src/routes/reviewRoutes.js";
+import igdbRoute from "./src/routes/igdbRoutes.js";
+import installedGamesRoute from "./src/routes/installedGamesRoutes.js";
 
 const API_PORT =
   process.env.API_PORT || console.log("No port defined in .env file");
@@ -30,6 +32,9 @@ const startServer = async () => {
     app.use("/api/users", userRoute);
     app.use("/api/serverGame", serverGameRoute);
     app.use("/api/review", reviewRoute);
+    app.use("/api/igdb", igdbRoute);
+    app.use("/api/installedGames", installedGamesRoute);
+
     app.get("/", (req, res) => {
       res.sendFile(path.join(__dirname, "public", "index.html"));
     });

@@ -1,45 +1,34 @@
-// controllers/reviewController.js
 import Review from "../models/reviewModel.js";
 import ServerGame from "../models/serverGameModel.js";
-import { log } from "console";
+import { updateGameRating } from "../utils/updateGameRating.js";
 
-// Créer ou mettre à jour une review
+// Ajouter ou mettre à jour une review
 export const addOrUpdateReview = async (req, res) => {
   const { rating, comment } = req.body;
-  const gameId = req.params.gameId;
-  const userId = req.user._id; // Assure-toi que `req.user` contient l'utilisateur authentifié
+  const { gameId } = req.params;
+  const userId = req.user.id;
 
-  if (!rating || rating < 1 || rating > 5) {
-    return res.status(400).json({ message: "Rating must be between 1 and 5." });
+  if (!rating || rating < 0.5 || rating > 5) {
+    return res
+      .status(400)
+      .json({ message: "Rating must be between 0.5 and 5." });
   }
 
   try {
-    const gameExists = await ServerGame.findById(gameId);
-    if (!gameExists) {
+    const game = await ServerGame.findById(gameId);
+    if (!game) {
       return res.status(404).json({ message: "Game not found." });
     }
 
-    const existingReview = await Review.findOne({ game: gameId, user: userId });
+    const review = await Review.findOneAndUpdate(
+      { game: gameId, user: userId },
+      { rating, comment: comment?.trim() },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
-    if (existingReview) {
-      // Update review
-      existingReview.rating = rating;
-      if (comment !== undefined) existingReview.comment = comment?.trim();
-      await existingReview.save();
-      return res
-        .status(200)
-        .json({ message: "Review updated.", review: existingReview });
-    } else {
-      // New review
-      const review = new Review({
-        game: gameId,
-        user: userId,
-        rating,
-        comment: comment?.trim(),
-      });
-      await review.save();
-      return res.status(201).json({ message: "Review added.", review });
-    }
+    await updateGameRating(gameId);
+
+    res.status(200).json({ message: "Review added/updated.", review });
   } catch (error) {
     console.error("[addOrUpdateReview] Error:", error.message);
     res.status(500).json({ message: "Server error.", error: error.message });
@@ -48,18 +37,12 @@ export const addOrUpdateReview = async (req, res) => {
 
 // Récupérer toutes les reviews d'un jeu
 export const getReviewsByGame = async (req, res) => {
-  const gameId = req.params.gameId;
+  const { gameId } = req.params;
 
   try {
-    const gameExists = await ServerGame.findById(gameId);
-    if (!gameExists) {
-      return res.status(404).json({ message: "Game not found." });
-    }
-
-    const reviews = await Review.find({ game: gameId }).populate(
-      "user",
-      "username email"
-    ); // Ajoute des infos de l'utilisateur
+    const reviews = await Review.find({ game: gameId })
+      .populate("user", "username email") // Ajoute infos user
+      .sort({ createdAt: -1 }); // Les + récents en premier
     res.status(200).json(reviews);
   } catch (error) {
     console.error("[getReviewsByGame] Error:", error.message);
@@ -69,7 +52,7 @@ export const getReviewsByGame = async (req, res) => {
   }
 };
 
-// Récupérer une review par jeu et utilisateur
+// Récupérer la review d'un joueur pour un jeu
 export const getReviewByGameAndUser = async (req, res) => {
   const { gameId } = req.params;
   const userId = req.user._id;
@@ -105,7 +88,10 @@ export const deleteReview = async (req, res) => {
       return res.status(404).json({ message: "Review not found." });
     }
 
-    await review.remove();
+    await review.deleteOne();
+
+    await updateGameRating(gameId);
+
     res.status(200).json({ message: "Review deleted." });
   } catch (error) {
     console.error("[deleteReview] Error:", error.message);

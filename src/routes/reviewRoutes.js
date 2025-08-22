@@ -16,3 +16,4 @@ router.get("/getReviewByGameAndUser/:gameId", authMiddleware, getReviewByGameAnd
 router.delete("/deleteReview/:gameId/:reviewId", authMiddleware, deleteReview);
 
 export default router;
+
