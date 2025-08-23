@@ -1,8 +1,14 @@
 import express from "express";
-const router = express.Router();
 import { register, login } from "../controllers/userController.js";
+import {
+  validateRegister,
+  validateLogin,
+} from "../middlewares/validationMiddleware.js";
 
-router.post("/register", register);
-router.post("/login", login);
+const router = express.Router();
+
+// Routes avec validation et rate limiting
+router.post("/register", validateRegister, register);
+router.post("/login", validateLogin, login);
 
 export default router;

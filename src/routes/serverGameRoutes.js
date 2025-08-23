@@ -1,7 +1,5 @@
 import express from "express";
 
-const router = express.Router();
-
 import {
   addGame,
   getAllGames,
@@ -11,15 +9,21 @@ import {
   downloadGame,
 } from "../controllers/serverGameController.js";
 
-// Routes pour le CRUD
+import {
+  validateAddGame,
+  validateUpdateGame,
+  validateObjectId,
+} from "../middlewares/validationMiddleware.js";
+
+const router = express.Router();
+
 router.get("/getAllGames", getAllGames);
-router.get("/getGameById/:id", getGameById);
-router.post("/addGame", addGame);
-router.patch("/updateGame/:id", updateGame);
-router.delete("/deleteGame/:id", deleteGame);
+router.get("/getGameById/:id", validateObjectId, getGameById);
+router.post("/addGame", validateAddGame, addGame);
+router.patch("/updateGame/:id", validateUpdateGame, updateGame);
+router.delete("/deleteGame/:id", validateObjectId, deleteGame);
 
-// Routes Download
-router.get("/downloadGame/:id", downloadGame);
-
+// Route download
+router.get("/downloadGame/:id", validateObjectId, downloadGame);
 
 export default router;
