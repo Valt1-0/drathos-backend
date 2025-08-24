@@ -27,6 +27,28 @@ const ServerGameSchema = new mongoose.Schema({
   addedAt: { type: Date, default: Date.now },
   avgRating: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },
+
+  // NOUVEAUX CHAMPS pour le lancement
+  executable: {
+    fileName: { type: String }, // Nom du fichier executable (ex: "game.exe")
+    relativePath: { type: String }, // Chemin relatif depuis la racine (ex: "bin/game.exe")
+    arguments: { type: String, default: "" }, // Arguments de lancement
+    workingDirectory: { type: String }, // Répertoire de travail (optionnel)
+    requiresAdmin: { type: Boolean, default: false }, // Nécessite droits admin
+    compatibilityMode: { type: String }, // Mode compatibilité Windows
+  },
+
+  // Configuration de lancement avancée
+  launchConfig: {
+    prelaunchCommands: [{ type: String }], // Commandes pré-lancement
+    postlaunchCommands: [{ type: String }], // Commandes post-lancement
+    environmentVariables: {
+      type: Map,
+      of: String, // Variables d'environnement
+    },
+    minimumRAM: { type: Number }, // RAM minimum en MB
+    minimumDiskSpace: { type: Number }, // Espace disque minimum en MB
+  },
 });
 
 export default mongoose.model("ServerGame", ServerGameSchema);

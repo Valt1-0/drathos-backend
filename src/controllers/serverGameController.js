@@ -228,7 +228,6 @@ export const downloadGame = async (req, res) => {
     const game = await Game.findById(req.params.id);
     console.log("Requested download for ID:", req.params.id); // 👈 Ici
 
-
     if (!game) {
       console.error("[downloadGame] Game not found for ID:", req.params.id);
       return res.status(404).json({ message: "Game not found." });
@@ -256,3 +255,130 @@ export const downloadGame = async (req, res) => {
       .json({ message: "Error downloading game.", error: error.message });
   }
 };
+
+export const configureExecutable = async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const {
+      fileName,
+      relativePath,
+      arguments: launchArgs,
+      workingDirectory,
+      requiresAdmin,
+      compatibilityMode,
+      prelaunchCommands,
+      postlaunchCommands,
+      environmentVariables,
+    } = req.body;
+
+    const game = await ServerGame.findById(gameId);
+    if (!game) {
+      return res.status(404).json({ message: "Jeu non trouvé" });
+    }
+
+    // Mettre à jour la configuration executable
+    game.executable = {
+      fileName,
+      relativePath,
+      arguments: launchArgs || "",
+      workingDirectory,
+      requiresAdmin: requiresAdmin || false,
+      compatibilityMode,
+    };
+
+    if (prelaunchCommands || postlaunchCommands || environmentVariables) {
+      game.launchConfig = {
+        prelaunchCommands: prelaunchCommands || [],
+        postlaunchCommands: postlaunchCommands || [],
+        environmentVariables: environmentVariables || new Map(),
+      };
+    }
+
+    await game.save();
+
+    res.status(200).json({
+      message: "Configuration executable mise à jour",
+      executable: game.executable,
+    });
+  } catch (error) {
+    console.error("[configureExecutable] Error:", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
+  }
+};
+
+// Route pour lister les fichiers dans un jeu extrait
+export const listGameFiles = async (req, res) => {
+  try {
+    const { gameId } = req.params;
+
+    // Trouver le jeu installé pour cet utilisateur
+    const installedGame = await InstalledGame.findOne({
+      userId: req.user.id,
+      serverGameId: gameId,
+    });
+
+    if (!installedGame) {
+      return res.status(404).json({ message: "Jeu non installé" });
+    }
+
+    const gamePath = installedGame.path;
+
+    if (!fs.existsSync(gamePath)) {
+      return res.status(404).json({ message: "Fichiers du jeu non trouvés" });
+    }
+
+    // Lister récursivement tous les fichiers
+    const files = listFilesRecursive(gamePath, gamePath);
+
+    // Filtrer les executables potentiels
+    const executables = files.filter(
+      (file) =>
+        file.extension === ".exe" ||
+        file.extension === ".bat" ||
+        file.extension === ".cmd" ||
+        file.name.toLowerCase().includes("start") ||
+        file.name.toLowerCase().includes("launch") ||
+        file.name.toLowerCase().includes("game")
+    );
+
+    res.status(200).json({
+      allFiles: files,
+      suggestedExecutables: executables,
+      gamePath: gamePath,
+    });
+  } catch (error) {
+    console.error("[listGameFiles] Error:", error);
+    res.status(500).json({ message: "Erreur serveur", error: error.message });
+  }
+};
+
+// Fonction utilitaire pour lister les fichiers récursivement
+function listFilesRecursive(dir, baseDir) {
+  const files = [];
+
+  function scanDirectory(currentDir) {
+    const items = fs.readdirSync(currentDir);
+
+    items.forEach((item) => {
+      const fullPath = path.join(currentDir, item);
+      const stats = fs.statSync(fullPath);
+      const relativePath = path.relative(baseDir, fullPath);
+
+      if (stats.isDirectory()) {
+        scanDirectory(fullPath);
+      } else {
+        files.push({
+          name: item,
+          relativePath: relativePath,
+          fullPath: fullPath,
+          extension: path.extname(item).toLowerCase(),
+          size: stats.size,
+          isExecutable: path.extname(item).toLowerCase() === ".exe",
+        });
+      }
+    });
+  }
+
+  scanDirectory(dir);
+  return files;
+}
