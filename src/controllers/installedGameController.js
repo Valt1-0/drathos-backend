@@ -220,3 +220,50 @@ function formatPlayTime(seconds) {
     return `${hours}h ${minutes}m`;
   }
 }
+
+/**
+ * 🗑️ Supprime un jeu installé de la base de données
+ */
+export const removeInstalledGame = async (req, res) => {
+  try {
+    const userId = req.user.id; // Récupéré depuis le middleware auth
+    const { serverGameId } = req.body;
+
+    if (!serverGameId) {
+      return res.status(400).json({ message: "serverGameId requis" });
+    }
+
+    console.log(
+      `[Backend] 🗑️ Suppression jeu: ${serverGameId} pour user: ${userId}`
+    );
+
+    // Trouver et supprimer le jeu installé
+    const result = await InstalledGame.findOneAndDelete({
+      userId,
+      serverGameId,
+    });
+
+    if (!result) {
+      return res.status(404).json({
+        message: "Jeu non trouvé dans les jeux installés",
+      });
+    }
+
+    console.log(`[Backend] ✅ Jeu supprimé avec succès: ${result._id}`);
+
+    res.status(200).json({
+      message: "Jeu désinstallé avec succès",
+      deletedGame: {
+        id: result._id,
+        serverGameId: result.serverGameId,
+        path: result.path,
+      },
+    });
+  } catch (error) {
+    console.error("[Backend] ❌ Erreur lors de la suppression du jeu:", error);
+    res.status(500).json({
+      message: "Erreur serveur lors de la désinstallation",
+      error: error.message,
+    });
+  }
+};

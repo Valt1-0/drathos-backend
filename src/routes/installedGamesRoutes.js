@@ -7,6 +7,7 @@ import {
   launchGame,
   stopGame,
   getGameStats,
+  removeInstalledGame,
 } from "../controllers/installedGameController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
@@ -15,6 +16,7 @@ const router = express.Router();
 // Routes existantes
 router.get("/getInstalledGames", authMiddleware, getInstalledGames);
 router.post("/addInstalledGame", authMiddleware, addInstalledGame);
+router.delete("/removeInstalledGame", authMiddleware, removeInstalledGame);
 
 // Nouvelles routes pour le tracking
 router.post("/launch/:gameId", authMiddleware, launchGame);
