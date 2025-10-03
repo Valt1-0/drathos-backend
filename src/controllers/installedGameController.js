@@ -227,20 +227,19 @@ function formatPlayTime(seconds) {
 export const removeInstalledGame = async (req, res) => {
   try {
     const userId = req.user.id; // Récupéré depuis le middleware auth
-    const { serverGameId } = req.body;
-
-    if (!serverGameId) {
-      return res.status(400).json({ message: "serverGameId requis" });
+    const { gameId } = req.params;
+    if (!gameId) {
+      return res.status(400).json({ message: "gameId requis" });
     }
 
     console.log(
-      `[Backend] 🗑️ Suppression jeu: ${serverGameId} pour user: ${userId}`
+      `[Backend] 🗑️ Suppression jeu: ${gameId} pour user: ${userId}`
     );
 
     // Trouver et supprimer le jeu installé
     const result = await InstalledGame.findOneAndDelete({
       userId,
-      serverGameId,
+      serverGameId: gameId,
     });
 
     if (!result) {

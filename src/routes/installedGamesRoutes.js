@@ -16,7 +16,7 @@ const router = express.Router();
 // Routes existantes
 router.get("/getInstalledGames", authMiddleware, getInstalledGames);
 router.post("/addInstalledGame", authMiddleware, addInstalledGame);
-router.delete("/removeInstalledGame", authMiddleware, removeInstalledGame);
+router.delete("/removeInstalledGame/:gameId", authMiddleware, removeInstalledGame);
 
 // Nouvelles routes pour le tracking
 router.post("/launch/:gameId", authMiddleware, launchGame);

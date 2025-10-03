@@ -6,6 +6,13 @@ import { fileURLToPath } from "url";
 import { log } from "console";
 import { fetchGameDetails, fetchGenresByIds } from "./igdbController.js";
 
+import {
+  sanitizePath,
+  validateFileName,
+  validateFileAccess,
+  cleanFileName,
+} from "../utils/pathValidator.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -31,40 +38,64 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage, fileFilter }).single("zipFile");
 
 export const addGame = (req, res) => {
+  console.log("[addGame] 🚀 Requête reçue"); // ← AJOUTER
+
   upload(req, res, async (err) => {
+    console.log("[addGame] 📦 Multer callback appelé"); // ← AJOUTER
+
     if (err) {
+      console.error("[addGame] ❌ Erreur Multer:", err.message); // ← AJOUTER
       return res.status(400).json({ error: true, message: err.message });
     }
+
+    console.log("[addGame] ✅ Fichier uploadé:", req.file?.originalname); // ← AJOUTER
 
     const { version, isPublic, igdbId } = req.body;
 
     if (!igdbId) {
+      console.error("[addGame] ❌ IGDB ID manquant"); // ← AJOUTER
       return res.status(400).json({ error: true, message: "Missing IGDB ID." });
     }
 
     if (!req.file) {
+      console.error("[addGame] ❌ Fichier manquant"); // ← AJOUTER
       return res
         .status(400)
         .json({ error: true, message: "Missing compressed file." });
     }
 
     try {
+      console.log("[addGame] 🔍 Récupération données IGDB pour:", igdbId); // ← AJOUTER
       const gameData = await fetchGameDetails(igdbId);
 
-      const genreIds = (gameData.genres || []).map((g) => g.id); // 🔥 FIX
+      const genreIds = (gameData.genres || []).map((g) => g.id);
       const genres = await fetchGenresByIds(genreIds);
 
       const originalName = path.parse(req.file.originalname).name;
       const extension = path.extname(req.file.originalname).toLowerCase();
-      const cleanName = originalName.trim().toLowerCase().replace(/\s+/g, "_");
-      const filename = `${cleanName}${extension}`;
-      const filePath = path.join("serverGames", filename);
 
-      if (!fs.existsSync("serverGames")) {
-        fs.mkdirSync("serverGames", { recursive: true });
+      console.log("[addGame] 📝 Nom original:", originalName); // ← AJOUTER
+
+      const cleanName = cleanFileName(originalName);
+      console.log("[addGame] 🧹 Nom nettoyé:", cleanName); // ← AJOUTER
+
+      const filename = `${cleanName}${extension}`;
+      console.log("[addGame] 📄 Nom final:", filename); // ← AJOUTER
+
+      validateFileName(filename);
+
+      const safePath = sanitizePath(GAME_FILES_DIR, filename);
+
+      if (fs.existsSync(safePath)) {
+        return res.status(400).json({
+          error: true,
+          message: "Un fichier avec ce nom existe déjà",
+        });
       }
 
-      fs.writeFileSync(filePath, req.file.buffer);
+      fs.writeFileSync(safePath, req.file.buffer);
+
+      console.log(`[addGame] ✅ Fichier sauvegardé: ${safePath}`);
 
       const newGame = new Game({
         name: gameData.name,
@@ -82,7 +113,7 @@ export const addGame = (req, res) => {
         igdbId: gameData.id,
 
         zipFileName: filename,
-        zipFilePath: filePath,
+        zipFilePath: safePath,
         version: version || "1.0.0",
         sizeMB: +(req.file.size / (1024 * 1024)).toFixed(2),
         isPublic: isPublic !== undefined ? isPublic : true,
@@ -96,7 +127,20 @@ export const addGame = (req, res) => {
         game: newGame,
       });
     } catch (error) {
-      console.error("[addGame] Error:", error);
+      console.error("[addGame] 💥 Error:", error);
+
+      // Si c'est une erreur de validation, renvoyer un message clair
+      if (
+        error.message &&
+        (error.message.includes("invalide") ||
+          error.message.includes("interdit"))
+      ) {
+        return res.status(400).json({
+          error: true,
+          message: error.message,
+        });
+      }
+
       res.status(500).json({
         error: true,
         message: "Server error",
@@ -160,34 +204,42 @@ export const updateGame = (req, res) => {
 
       // Nouveau fichier ZIP ?
       if (req.file) {
-        // Supprimer l'ancien fichier si il existe
-        const oldPath = game.zipFilePath;
-
-        if (fs.existsSync(oldPath)) {
-          fs.unlinkSync(oldPath);
-          console.log("[updateGame] Ancien fichier supprimé :", oldPath);
-        }
-
-        // Générer nom propre
+        // 🔒 SÉCURISATION DU NOUVEAU FICHIER
         const originalName = path.parse(req.file.originalname).name;
         const extension = path.extname(req.file.originalname).toLowerCase();
-        const cleanName = originalName
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, "_");
+        const cleanName = cleanFileName(originalName);
         const filename = `${cleanName}${extension}`;
-        const newPath = path.join(GAME_FILES_DIR, filename);
+
+        // 🔒 VALIDER
+        validateFileName(filename);
+
+        // 🔒 SÉCURISER le nouveau chemin
+        const newPath = sanitizePath(GAME_FILES_DIR, filename);
+
+        // Supprimer l'ancien fichier de manière sécurisée
+        try {
+          const oldPath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
+          if (fs.existsSync(oldPath)) {
+            fs.unlinkSync(oldPath);
+            console.log("[updateGame] ✅ Ancien fichier supprimé:", oldPath);
+          }
+        } catch (error) {
+          console.warn(
+            "[updateGame] ⚠️ Impossible de supprimer l'ancien fichier:",
+            error.message
+          );
+        }
 
         // Sauvegarder le nouveau fichier
         fs.writeFileSync(newPath, req.file.buffer);
 
-        console.log("[updateGame] Nouveau fichier sauvegardé :", newPath); // Log new file path
+        console.log("[updateGame] ✅ Nouveau fichier sauvegardé:", newPath);
 
         // Mettre à jour les champs
         game.zipFileName = filename;
         game.zipFilePath = newPath;
+        game.sizeMB = +(req.file.size / (1024 * 1024)).toFixed(2);
       }
-
       await game.save();
       res.status(200).json({ message: "Game updated successfully.", game });
     } catch (error) {
@@ -207,10 +259,16 @@ export const deleteGame = async (req, res) => {
       return res.status(404).json({ message: "Game not found." });
     }
 
-    const zipPath = path.join(__dirname, game.zipFilePath);
-    if (fs.existsSync(zipPath)) {
-      fs.unlinkSync(zipPath); // Deleting file
-      console.log("[deleteGame] Deleted ZIP file:", zipPath); // Log file deletion
+    // 🔒 VALIDATION SÉCURISÉE du chemin avant suppression
+    try {
+      const safePath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
+      fs.unlinkSync(safePath);
+      console.log("[deleteGame] ✅ Deleted ZIP file:", safePath);
+    } catch (error) {
+      console.warn(
+        "[deleteGame] ⚠️ Fichier déjà supprimé ou inaccessible:",
+        error.message
+      );
     }
 
     await Game.findByIdAndDelete(req.params.id);
@@ -233,26 +291,31 @@ export const downloadGame = async (req, res) => {
       return res.status(404).json({ message: "Game not found." });
     }
 
-    // Construct the correct path to the serverGames directory
-    const serverGamesDir = path.resolve(__dirname, "../../serverGames");
-    const zipPath = path.join(serverGamesDir, game.zipFileName);
+    // 🔒 VALIDATION CRITIQUE avant le téléchargement
+    const safePath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
 
-    if (!fs.existsSync(zipPath)) {
-      console.error("[downloadGame] ZIP file not found:", zipPath);
-      return res.status(404).json({ message: "ZIP file not found." });
-    }
+    console.log("[downloadGame] ✅ Serving file:", safePath);
 
-    res.download(zipPath, game.zipFileName, (err) => {
+    // Téléchargement sécurisé
+    res.download(safePath, game.zipFileName, (err) => {
       if (err) {
-        console.error("[downloadGame] Error downloading file:", err.message);
-        res.status(500).json({ message: "Error downloading file." });
+        console.error("[downloadGame] Error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "Download error." });
+        }
       }
     });
   } catch (error) {
-    console.error("[downloadGame] Error downloading game:", error.message);
-    res
-      .status(500)
-      .json({ message: "Error downloading game.", error: error.message });
+    console.error("[downloadGame] Error:", error.message);
+
+    if (
+      error.message.includes("introuvable") ||
+      error.message.includes("interdit")
+    ) {
+      return res.status(404).json({ message: error.message });
+    }
+
+    res.status(500).json({ message: "Error downloading game." });
   }
 };
 
