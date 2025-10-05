@@ -35,9 +35,9 @@ export const addInstalledGame = async (req, res) => {
           isPlaying: false,
         },
         achievements: [],
-        customStats: {}, // Utilise un objet pour MongoDB
+        customStats: {},
       },
-      installSize: 0, // Sera mis à jour si nécessaire
+      installSize: 0,
     });
 
     await installedGame.save();
@@ -64,7 +64,6 @@ export const getInstalledGames = async (req, res) => {
       })
       .sort({ "stats.lastPlayed": -1, installedAt: -1 });
 
-    // Formater les données avec stats lisibles
     const formattedGames = games.map((game) => ({
       ...game.toObject(),
       formattedStats: {
@@ -100,13 +99,12 @@ export const launchGame = async (req, res) => {
       return res.status(404).json({ message: "Jeu non installé" });
     }
 
-    // Marquer le début de session
-    installedGame.stats.currentSession.startTime = new Date();
+    installedGame.stats.currentSession.startTime = Date.now();
     installedGame.stats.currentSession.isPlaying = true;
     installedGame.stats.totalSessions += 1;
 
     if (!installedGame.stats.firstLaunched) {
-      installedGame.stats.firstLaunched = new Date();
+      installedGame.stats.firstLaunched = Date.now();
     }
 
     await installedGame.save();
@@ -144,15 +142,13 @@ export const stopGame = async (req, res) => {
 
     // Calculer la durée de la session
     const sessionStart = installedGame.stats.currentSession.startTime;
-    const sessionDuration = Math.floor(
-      (Date.now() - sessionStart.getTime()) / 1000
-    );
+    const sessionDuration = Math.floor((Date.now() - sessionStart) / 1000);
 
     console.log(`[Backend] ⏱️ Durée session: ${sessionDuration}s`);
 
     // Mettre à jour les statistiques
     installedGame.stats.totalPlayTime += sessionDuration;
-    installedGame.stats.lastPlayed = new Date();
+    installedGame.stats.lastPlayed = Date.now();
     installedGame.stats.currentSession.isPlaying = false;
     installedGame.stats.currentSession.startTime = null;
 
@@ -190,7 +186,13 @@ export const getGameStats = async (req, res) => {
       totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
       totalSessions: installedGame.stats.totalSessions,
       lastPlayed: installedGame.stats.lastPlayed,
+      lastPlayedFormatted: installedGame.stats.lastPlayed
+        ? formatRelativeTime(installedGame.stats.lastPlayed)
+        : "Never",
       firstLaunched: installedGame.stats.firstLaunched,
+      firstLaunchedFormatted: installedGame.stats.firstLaunched
+        ? new Date(installedGame.stats.firstLaunched).toLocaleDateString()
+        : "Never",
       averageSessionTime:
         installedGame.stats.totalSessions > 0
           ? formatPlayTime(
@@ -215,20 +217,6 @@ export const getGameStats = async (req, res) => {
       .json({ message: "Erreur lors de la récupération des stats" });
   }
 };
-
-// Fonction utilitaire pour formater le temps de jeu
-function formatPlayTime(seconds) {
-  if (!seconds || seconds < 60) return "< 1 minute";
-
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  if (hours === 0) {
-    return `${minutes} minute${minutes > 1 ? "s" : ""}`;
-  } else {
-    return `${hours}h ${minutes}m`;
-  }
-}
 
 /**
  * 🗑️ Supprime un jeu installé de la base de données
@@ -273,3 +261,43 @@ export const removeInstalledGame = async (req, res) => {
     });
   }
 };
+
+function formatPlayTime(seconds) {
+  if (!seconds || seconds < 60) return "< 1 minute";
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (hours === 0) {
+    return `${minutes} minute${minutes > 1 ? "s" : ""}`;
+  } else {
+    return `${hours}h ${minutes}m`;
+  }
+}
+
+function formatRelativeTime(date) {
+  // Convertir la date UTC en timestamp local
+  const localDate = new Date(date);
+  const seconds = Math.floor((Date.now() - localDate.getTime()) / 1000);
+
+  if (seconds < 60) return "Just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+
+  // Pour les dates plus anciennes, afficher avec le fuseau horaire local
+  const isCurrentYear = localDate.getFullYear() === new Date().getFullYear();
+
+  // Utiliser toLocaleDateString qui gère automatiquement le fuseau horaire
+  return localDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(isCurrentYear ? {} : { year: "numeric" }),
+  });
+}

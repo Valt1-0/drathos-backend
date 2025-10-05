@@ -22,7 +22,6 @@ const installedGameSchema = new mongoose.Schema(
       type: String,
       default: "1.0.0",
     },
-    // Nouvelles statistiques de jeu
     stats: {
       totalPlayTime: {
         type: Number,
@@ -33,17 +32,17 @@ const installedGameSchema = new mongoose.Schema(
         default: 0,
       },
       lastPlayed: {
-        type: Date,
+        type: Number,
         default: null,
       },
       firstLaunched: {
-        type: Date,
+        type: Number,
         default: null,
       },
       // Session en cours
       currentSession: {
         startTime: {
-          type: Date,
+          type: Number,
           default: null,
         },
         isPlaying: {
