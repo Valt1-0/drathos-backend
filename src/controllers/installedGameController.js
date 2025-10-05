@@ -128,12 +128,17 @@ export const stopGame = async (req, res) => {
     const { gameId } = req.params;
     const userId = req.user.id;
 
+    console.log(
+      `[Backend] 🛑 Arrêt jeu demandé - gameId: ${gameId}, userId: ${userId}`
+    );
+
     const installedGame = await InstalledGame.findOne({
       userId,
       serverGameId: gameId,
     });
 
     if (!installedGame || !installedGame.stats.currentSession.isPlaying) {
+      console.log(`[Backend] ⚠️ Aucune session active pour ${gameId}`);
       return res.status(404).json({ message: "Aucune session active" });
     }
 
@@ -143,6 +148,8 @@ export const stopGame = async (req, res) => {
       (Date.now() - sessionStart.getTime()) / 1000
     );
 
+    console.log(`[Backend] ⏱️ Durée session: ${sessionDuration}s`);
+
     // Mettre à jour les statistiques
     installedGame.stats.totalPlayTime += sessionDuration;
     installedGame.stats.lastPlayed = new Date();
@@ -151,13 +158,15 @@ export const stopGame = async (req, res) => {
 
     await installedGame.save();
 
+    console.log(`[Backend] ✅ Stats sauvegardées pour ${gameId}`);
+
     res.status(200).json({
       message: "Session terminée",
       sessionDuration: formatPlayTime(sessionDuration),
       totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
     });
   } catch (err) {
-    console.error("Error stopping game:", err);
+    console.error("[Backend] ❌ Error stopping game:", err);
     res.status(500).json({ message: "Erreur lors de l'arrêt" });
   }
 };
@@ -232,9 +241,7 @@ export const removeInstalledGame = async (req, res) => {
       return res.status(400).json({ message: "gameId requis" });
     }
 
-    console.log(
-      `[Backend] 🗑️ Suppression jeu: ${gameId} pour user: ${userId}`
-    );
+    console.log(`[Backend] 🗑️ Suppression jeu: ${gameId} pour user: ${userId}`);
 
     // Trouver et supprimer le jeu installé
     const result = await InstalledGame.findOneAndDelete({
