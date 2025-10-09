@@ -99,9 +99,12 @@ export const launchGame = async (req, res) => {
       return res.status(404).json({ message: "Jeu non installé" });
     }
 
+    // Marquer la session comme active
     installedGame.stats.currentSession.startTime = Date.now();
     installedGame.stats.currentSession.isPlaying = true;
-    installedGame.stats.totalSessions += 1;
+
+    // Note : totalSessions sera incrémenté lors de la synchronisation finale (sync-stats)
+    // pour éviter le double comptage entre local et remote
 
     if (!installedGame.stats.firstLaunched) {
       installedGame.stats.firstLaunched = Date.now();
@@ -215,6 +218,70 @@ export const getGameStats = async (req, res) => {
     res
       .status(500)
       .json({ message: "Erreur lors de la récupération des stats" });
+  }
+};
+
+/**
+ * 🔄 Synchronise les statistiques du client vers le serveur
+ * Cette méthode effectue un merge intelligent des stats local/remote
+ */
+export const syncGameStats = async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const userId = req.user.id;
+    const { totalPlayTime, totalSessions, lastPlayed, firstLaunched, sessionDuration } = req.body;
+
+    console.log(`[Backend] 🔄 Sync stats - gameId: ${gameId}, userId: ${userId}`);
+    console.log(`[Backend] Stats reçues:`, { totalPlayTime, totalSessions, lastPlayed, firstLaunched, sessionDuration });
+
+    // Trouver le jeu installé
+    const installedGame = await InstalledGame.findOne({
+      userId,
+      serverGameId: gameId,
+    });
+
+    if (!installedGame) {
+      return res.status(404).json({ message: "Jeu non installé" });
+    }
+
+    // MERGE INTELLIGENT : Prendre les valeurs maximales (les plus à jour)
+    const oldTotalPlayTime = installedGame.stats.totalPlayTime || 0;
+    const oldTotalSessions = installedGame.stats.totalSessions || 0;
+    const oldLastPlayed = installedGame.stats.lastPlayed ? new Date(installedGame.stats.lastPlayed).getTime() : 0;
+    const oldFirstLaunched = installedGame.stats.firstLaunched ? new Date(installedGame.stats.firstLaunched).getTime() : Date.now();
+
+    // Utiliser les valeurs maximales pour éviter les conflits
+    installedGame.stats.totalPlayTime = Math.max(oldTotalPlayTime, totalPlayTime || 0);
+    installedGame.stats.totalSessions = Math.max(oldTotalSessions, totalSessions || 0);
+    installedGame.stats.lastPlayed = Math.max(oldLastPlayed, lastPlayed || 0);
+    installedGame.stats.firstLaunched = Math.min(oldFirstLaunched, firstLaunched || Date.now());
+
+    // Réinitialiser la session actuelle (le jeu est fermé)
+    installedGame.stats.currentSession.isPlaying = false;
+    installedGame.stats.currentSession.startTime = null;
+
+    await installedGame.save();
+
+    console.log(`[Backend] ✅ Stats synchronisées pour ${gameId}`);
+    console.log(`[Backend] Nouvelles valeurs:`, {
+      totalPlayTime: installedGame.stats.totalPlayTime,
+      totalSessions: installedGame.stats.totalSessions,
+      lastPlayed: installedGame.stats.lastPlayed,
+    });
+
+    res.status(200).json({
+      message: "Stats synchronisées avec succès",
+      stats: {
+        totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
+        totalSessions: installedGame.stats.totalSessions,
+        lastPlayed: installedGame.stats.lastPlayed,
+        firstLaunched: installedGame.stats.firstLaunched,
+        sessionDuration: sessionDuration ? formatPlayTime(sessionDuration) : null,
+      },
+    });
+  } catch (err) {
+    console.error("[Backend] ❌ Error syncing stats:", err);
+    res.status(500).json({ message: "Erreur lors de la synchronisation" });
   }
 };
 

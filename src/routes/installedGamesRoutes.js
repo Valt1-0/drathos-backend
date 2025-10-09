@@ -7,6 +7,7 @@ import {
   launchGame,
   stopGame,
   getGameStats,
+  syncGameStats,
   removeInstalledGame,
 } from "../controllers/installedGameController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
@@ -22,5 +23,6 @@ router.delete("/removeInstalledGame/:gameId", authMiddleware, removeInstalledGam
 router.post("/launch/:gameId", authMiddleware, launchGame);
 router.post("/stop/:gameId", authMiddleware, stopGame);
 router.get("/stats/:gameId", authMiddleware, getGameStats);
+router.post("/sync-stats/:gameId", authMiddleware, syncGameStats); // 🔄 Nouvelle route pour sync bidirectionnelle
 
 export default router;
