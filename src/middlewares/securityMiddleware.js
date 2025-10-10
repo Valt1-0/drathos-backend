@@ -10,7 +10,7 @@ export const corsConfig = cors({
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cache-Control"],
 });
 
 // Configuration Helmet pour sécuriser les headers
