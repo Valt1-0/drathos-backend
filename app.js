@@ -22,6 +22,9 @@ import reviewRoute from "./src/routes/reviewRoutes.js";
 import igdbRoute from "./src/routes/igdbRoutes.js";
 import installedGamesRoute from "./src/routes/installedGamesRoutes.js";
 
+// Services de cleanup
+import { cleanupStuckSessions } from "./src/controllers/installedGameController.js";
+
 const API_PORT = process.env.API_PORT || 5001;
 
 const app = express();
@@ -30,6 +33,9 @@ const startServer = async () => {
   try {
     // Connect to MongoDB
     await connect();
+
+    // 🧹 Cleanup des sessions bloquées au démarrage
+    await cleanupStuckSessions();
 
     // Créer le dossier logs s'il n'existe pas
     if (!fs.existsSync("logs")) {

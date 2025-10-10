@@ -342,6 +342,45 @@ function formatPlayTime(seconds) {
   }
 }
 
+/**
+ * 🧹 Nettoie toutes les sessions bloquées au démarrage du serveur
+ * (sessions marquées comme "en cours" mais le serveur a redémarré)
+ */
+export const cleanupStuckSessions = async () => {
+  try {
+    console.log("[Cleanup] 🧹 Vérification des sessions bloquées...");
+
+    const result = await InstalledGame.updateMany(
+      { "stats.currentSession.isPlaying": true },
+      {
+        $set: {
+          "stats.currentSession.isPlaying": false,
+          "stats.currentSession.startTime": null,
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(
+        `[Cleanup] ✅ ${result.modifiedCount} session(s) bloquée(s) réinitialisée(s)`
+      );
+    } else {
+      console.log("[Cleanup] ✅ Aucune session bloquée détectée");
+    }
+
+    return {
+      success: true,
+      cleanedSessions: result.modifiedCount,
+    };
+  } catch (error) {
+    console.error("[Cleanup] ❌ Erreur lors du nettoyage des sessions:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
 function formatRelativeTime(date) {
   // Convertir la date UTC en timestamp local
   const localDate = new Date(date);
