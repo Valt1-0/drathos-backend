@@ -18,6 +18,10 @@ const ServerGameSchema = new mongoose.Schema({
   coverUrl: { type: String }, // URL vers image IGDB
   igdbId: { type: Number, required: true, unique: true },
 
+  // Company information
+  developer: { type: String }, // Nom du développeur
+  publisher: { type: String }, // Nom de l'éditeur
+
   zipFileName: { type: String, required: true },
   zipFilePath: { type: String, required: true },
   version: { type: String, default: "1.0.0" },

@@ -4,7 +4,7 @@ import fs from "fs";
 import Game from "../models/serverGameModel.js";
 import { fileURLToPath } from "url";
 import { log } from "console";
-import { fetchGameDetails, fetchGenresByIds } from "./igdbController.js";
+import { fetchGameDetails, fetchGenresByIds, extractCompanies } from "./igdbController.js";
 
 import {
   sanitizePath,
@@ -71,6 +71,9 @@ export const addGame = (req, res) => {
       const genreIds = (gameData.genres || []).map((g) => g.id);
       const genres = await fetchGenresByIds(genreIds);
 
+      // Extraire les informations de développeur et éditeur
+      const { developer, publisher } = extractCompanies(gameData.involved_companies);
+
       const originalName = path.parse(req.file.originalname).name;
       const extension = path.extname(req.file.originalname).toLowerCase();
 
@@ -111,6 +114,10 @@ export const addGame = (req, res) => {
         coverUrl:
           gameData.cover?.url.replace(/t_thumb/g, "t_cover_big_2x") || "",
         igdbId: gameData.id,
+
+        // Ajouter les informations de développeur et éditeur
+        developer: developer || null,
+        publisher: publisher || null,
 
         zipFileName: filename,
         zipFilePath: safePath,

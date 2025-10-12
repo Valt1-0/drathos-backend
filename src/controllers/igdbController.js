@@ -73,7 +73,7 @@ export const fetchGameDetails = async (igdbId) => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: `fields name, summary, storyline, genres.name, platforms.name, rating, aggregated_rating, cover.url, first_release_date; where id = ${igdbId};`,
+      body: `fields name, summary, storyline, genres.name, platforms.name, rating, aggregated_rating, cover.url, first_release_date, involved_companies.company.name, involved_companies.developer, involved_companies.publisher; where id = ${igdbId};`,
     });
 
     if (!response.ok) {
@@ -91,6 +91,28 @@ export const fetchGameDetails = async (igdbId) => {
     console.error("Error fetching game details:", error);
     throw error; // rethrow the error to be handled by the caller
   }
+};
+
+export const extractCompanies = (involvedCompanies) => {
+  if (!involvedCompanies || !Array.isArray(involvedCompanies)) {
+    return { developer: null, publisher: null };
+  }
+
+  let developer = null;
+  let publisher = null;
+
+  for (const company of involvedCompanies) {
+    if (company.developer && !developer && company.company?.name) {
+      developer = company.company.name;
+    }
+    if (company.publisher && !publisher && company.company?.name) {
+      publisher = company.company.name;
+    }
+    // Arrêter si on a trouvé les deux
+    if (developer && publisher) break;
+  }
+
+  return { developer, publisher };
 };
 
 export const fetchGenresByIds = async (ids) => {
