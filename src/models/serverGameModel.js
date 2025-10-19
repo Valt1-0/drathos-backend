@@ -18,7 +18,6 @@ const ServerGameSchema = new mongoose.Schema({
   coverUrl: { type: String }, // URL vers image IGDB
   igdbId: { type: Number, required: true, unique: true },
 
-  // Company information
   developer: { type: String }, // Nom du développeur
   publisher: { type: String }, // Nom de l'éditeur
 
@@ -28,9 +27,9 @@ const ServerGameSchema = new mongoose.Schema({
   sizeMB: { type: Number },
   isPublic: { type: Boolean, default: true },
 
-  addedAt: { type: Date, default: Date.now },
   avgRating: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },
+  addedAt: { type: Date, default: Date.now },
 });
 
 export default mongoose.model("ServerGame", ServerGameSchema);
