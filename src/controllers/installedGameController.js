@@ -231,9 +231,6 @@ export const syncGameStats = async (req, res) => {
     const userId = req.user.id;
     const { totalPlayTime, totalSessions, lastPlayed, firstLaunched, sessionDuration } = req.body;
 
-    console.log(`[Backend] 🔄 Sync stats - gameId: ${gameId}, userId: ${userId}`);
-    console.log(`[Backend] Stats reçues:`, { totalPlayTime, totalSessions, lastPlayed, firstLaunched, sessionDuration });
-
     // Trouver le jeu installé
     const installedGame = await InstalledGame.findOne({
       userId,
@@ -261,13 +258,6 @@ export const syncGameStats = async (req, res) => {
     installedGame.stats.currentSession.startTime = null;
 
     await installedGame.save();
-
-    console.log(`[Backend] ✅ Stats synchronisées pour ${gameId}`);
-    console.log(`[Backend] Nouvelles valeurs:`, {
-      totalPlayTime: installedGame.stats.totalPlayTime,
-      totalSessions: installedGame.stats.totalSessions,
-      lastPlayed: installedGame.stats.lastPlayed,
-    });
 
     res.status(200).json({
       message: "Stats synchronisées avec succès",
