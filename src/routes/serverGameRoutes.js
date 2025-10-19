@@ -15,15 +15,18 @@ import {
   validateObjectId,
 } from "../middlewares/validationMiddleware.js";
 
+import { authMiddleware, requireAdmin } from "../middlewares/authMiddleware.js";
+
 const router = express.Router();
 
+// Routes publiques
 router.get("/getAllGames", getAllGames);
 router.get("/getGameById/:id", validateObjectId, getGameById);
-router.post("/addGame", validateAddGame, addGame);
-router.patch("/updateGame/:id", validateUpdateGame, updateGame);
-router.delete("/deleteGame/:id", validateObjectId, deleteGame);
-
-// Route download
 router.get("/downloadGame/:id", validateObjectId, downloadGame);
+
+// Routes admin uniquement
+router.post("/addGame", authMiddleware, requireAdmin, validateAddGame, addGame);
+router.patch("/updateGame/:id", authMiddleware, requireAdmin, validateUpdateGame, updateGame);
+router.delete("/deleteGame/:id", authMiddleware, requireAdmin, validateObjectId, deleteGame);
 
 export default router;

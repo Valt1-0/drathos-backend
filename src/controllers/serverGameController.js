@@ -2,6 +2,8 @@ import multer from "multer";
 import path, { dirname } from "path";
 import fs from "fs";
 import Game from "../models/serverGameModel.js";
+import Review from "../models/reviewModel.js";
+import InstalledGame from "../models/installedGameModel.js";
 import { fileURLToPath } from "url";
 import { log } from "console";
 import { fetchGameDetails, fetchGenresByIds, extractCompanies } from "./igdbController.js";
@@ -260,31 +262,126 @@ export const updateGame = (req, res) => {
 
 export const deleteGame = async (req, res) => {
   try {
-    const game = await Game.findById(req.params.id);
+    const gameId = req.params.id;
+    const adminId = req.user.id;
+
+    console.log("[deleteGame] 🚀 Début suppression - ID:", gameId, "Admin:", adminId);
+
+    // 1️⃣ Vérifier l'existence du jeu
+    const game = await Game.findById(gameId);
     if (!game) {
-      console.error("[deleteGame] Game not found for ID:", req.params.id); // Log missing game
-      return res.status(404).json({ message: "Game not found." });
+      console.error("[deleteGame] ❌ Jeu non trouvé - ID:", gameId);
+      return res.status(404).json({
+        error: true,
+        message: "Game not found.",
+        code: "GAME_NOT_FOUND",
+      });
     }
 
-    // 🔒 VALIDATION SÉCURISÉE du chemin avant suppression
+    console.log("[deleteGame] ✅ Jeu trouvé:", game.name);
+
+    // 2️⃣ Vérifier qu'aucune installation n'est active
+    const activeInstallations = await InstalledGame.countDocuments({
+      serverGameId: gameId,
+    });
+
+    if (activeInstallations > 0) {
+      console.error(
+        `[deleteGame] ⚠️ ${activeInstallations} installation(s) active(s) trouvée(s)`
+      );
+      return res.status(409).json({
+        error: true,
+        message: `Cannot delete game with ${activeInstallations} active installation(s). Please uninstall it from all users first.`,
+        code: "ACTIVE_INSTALLATIONS_EXIST",
+        activeInstallations,
+      });
+    }
+
+    console.log("[deleteGame] ✅ Aucune installation active");
+
+    // 3️⃣ Supprimer tous les avis (cascading delete)
+    const deletedReviews = await Review.deleteMany({ game: gameId });
+    console.log(
+      `[deleteGame] ✅ ${deletedReviews.deletedCount} avis supprimés`
+    );
+
+    // 4️⃣ Supprimer les enregistrements InstalledGame
+    const deletedInstalled = await InstalledGame.deleteMany({
+      serverGameId: gameId,
+    });
+    console.log(
+      `[deleteGame] ✅ ${deletedInstalled.deletedCount} enregistrements InstalledGame supprimés`
+    );
+
+    // 5️⃣ Supprimer le jeu de la base de données
+    await Game.findByIdAndDelete(gameId);
+    console.log("[deleteGame] ✅ Jeu supprimé de la BD");
+
+    // 6️⃣ Supprimer le fichier ZIP
+    let fileDeletedSuccessfully = false;
+    let fileErrorDetails = null;
+
     try {
       const safePath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
-      fs.unlinkSync(safePath);
-      console.log("[deleteGame] ✅ Deleted ZIP file:", safePath);
-    } catch (error) {
-      console.warn(
-        "[deleteGame] ⚠️ Fichier déjà supprimé ou inaccessible:",
-        error.message
+      if (fs.existsSync(safePath)) {
+        fs.unlinkSync(safePath);
+        fileDeletedSuccessfully = true;
+        console.log("[deleteGame] ✅ Fichier ZIP supprimé:", safePath);
+      } else {
+        fileErrorDetails = "FILE_NOT_FOUND";
+        console.warn("[deleteGame] ⚠️ Fichier ZIP introuvable:", safePath);
+      }
+    } catch (fileError) {
+      fileErrorDetails = fileError.message;
+      console.error(
+        "[deleteGame] ⚠️ Erreur suppression fichier:",
+        fileError.message
       );
     }
 
-    await Game.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: "Game deleted successfully." });
+    console.log("[deleteGame] ✅ Suppression complétée avec succès");
+
+    // Répondre au client avec tous les détails
+    res.status(200).json({
+      error: false,
+      message: "Game deleted successfully.",
+      deletedGame: {
+        id: game._id,
+        name: game.name,
+        zipFileName: game.zipFileName,
+      },
+      cleanup: {
+        reviewsDeleted: deletedReviews.deletedCount,
+        installationsDeleted: deletedInstalled.deletedCount,
+        fileDeleted: fileDeletedSuccessfully,
+        fileError: fileErrorDetails,
+      },
+      audit: {
+        deletedBy: adminId,
+        deletedAt: new Date(),
+        timestamp: Date.now(),
+      },
+    });
   } catch (error) {
-    console.error("[deleteGame] Error deleting game:", error.message); // Log error
-    res
-      .status(500)
-      .json({ message: "Error deleting game.", error: error.message });
+    console.error("[deleteGame] 💥 Erreur critique:", error.message);
+
+    let statusCode = 500;
+    let errorCode = "DELETE_FAILED";
+
+    if (error.message.includes("interdit") || error.message.includes("introuvable")) {
+      statusCode = 403;
+      errorCode = "PATH_VALIDATION_ERROR";
+    } else if (error.name === "CastError") {
+      statusCode = 400;
+      errorCode = "INVALID_GAME_ID";
+    }
+
+    res.status(statusCode).json({
+      error: true,
+      message: "Error deleting game.",
+      code: errorCode,
+      details: error.message,
+    });
   }
 };
 
