@@ -60,7 +60,7 @@ export const getInstalledGames = async (req, res) => {
       .populate({
         path: "serverGameId",
         select:
-          "name summary coverUrl genres platforms version sizeMB rating aggregatedRating",
+          "name summary storyline coverUrl genres platforms version sizeMB rating aggregatedRating releaseDate developer publisher",
       })
       .sort({ "stats.lastPlayed": -1, installedAt: -1 });
 
@@ -179,7 +179,11 @@ export const getGameStats = async (req, res) => {
     const installedGame = await InstalledGame.findOne({
       userId,
       serverGameId: gameId,
-    }).populate("serverGameId");
+    }).populate({
+      path: "serverGameId",
+      select:
+        "name summary storyline coverUrl genres platforms version sizeMB rating aggregatedRating releaseDate developer publisher",
+    });
 
     if (!installedGame) {
       return res.status(404).json({ message: "Jeu non installé" });

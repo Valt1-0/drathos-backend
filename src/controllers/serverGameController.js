@@ -2,7 +2,6 @@ import multer from "multer";
 import path, { dirname } from "path";
 import fs from "fs";
 import Game from "../models/serverGameModel.js";
-import Review from "../models/reviewModel.js";
 import InstalledGame from "../models/installedGameModel.js";
 import { fileURLToPath } from "url";
 import { log } from "console";
@@ -300,13 +299,7 @@ export const deleteGame = async (req, res) => {
 
     console.log("[deleteGame] ✅ Aucune installation active");
 
-    // 3️⃣ Supprimer tous les avis (cascading delete)
-    const deletedReviews = await Review.deleteMany({ game: gameId });
-    console.log(
-      `[deleteGame] ✅ ${deletedReviews.deletedCount} avis supprimés`
-    );
-
-    // 4️⃣ Supprimer les enregistrements InstalledGame
+    // 3️⃣ Supprimer les enregistrements InstalledGame
     const deletedInstalled = await InstalledGame.deleteMany({
       serverGameId: gameId,
     });
@@ -352,7 +345,6 @@ export const deleteGame = async (req, res) => {
         zipFileName: game.zipFileName,
       },
       cleanup: {
-        reviewsDeleted: deletedReviews.deletedCount,
         installationsDeleted: deletedInstalled.deletedCount,
         fileDeleted: fileDeletedSuccessfully,
         fileError: fileErrorDetails,
