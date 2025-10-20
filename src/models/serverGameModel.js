@@ -26,6 +26,7 @@ const ServerGameSchema = new mongoose.Schema({
   version: { type: String, default: "1.0.0" },
   sizeMB: { type: Number },
   isPublic: { type: Boolean, default: true },
+  executableName: { type: String }, // Nom de l'exécutable à lancer (ex: "game.exe", "bin/server.exe")
 
   avgRating: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },

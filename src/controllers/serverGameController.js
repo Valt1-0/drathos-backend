@@ -52,7 +52,7 @@ export const addGame = (req, res) => {
 
     console.log("[addGame] ✅ Fichier uploadé:", req.file?.originalname); // ← AJOUTER
 
-    const { version, isPublic, igdbId } = req.body;
+    const { version, isPublic, igdbId, executableName } = req.body;
 
     if (!igdbId) {
       console.error("[addGame] ❌ IGDB ID manquant"); // ← AJOUTER
@@ -126,6 +126,7 @@ export const addGame = (req, res) => {
         version: version || "1.0.0",
         sizeMB: +(req.file.size / (1024 * 1024)).toFixed(2),
         isPublic: isPublic !== undefined ? isPublic : true,
+        executableName: executableName || null, // Exécutable défini par l'admin
       });
 
       await newGame.save();
