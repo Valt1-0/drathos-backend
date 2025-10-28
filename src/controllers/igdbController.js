@@ -18,7 +18,6 @@ async function getToken() {
   const data = await res.json();
   accessToken = data.access_token;
 
-  console.log("Received access token:", accessToken);
   return accessToken;
 }
 

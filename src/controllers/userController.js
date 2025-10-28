@@ -7,9 +7,6 @@ const JWT_TOKEN = process.env.JWT_TOKEN || console.log("JWT_TOKEN not found");
 export const register = async (req, res) => {
   const { username, password } = req.body;
 
-  console.log("Registering user: ", username);
-  console.log("Password: ", password);
-
   try {
     let user = await User.findOne({ username });
     if (user) {
