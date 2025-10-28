@@ -22,7 +22,8 @@ const router = express.Router();
 // Routes publiques
 router.get("/getAllGames", getAllGames);
 router.get("/getGameById/:id", validateObjectId, getGameById);
-router.get("/downloadGame/:id", validateObjectId, downloadGame);
+
+router.get("/downloadGame/:id", authMiddleware, validateObjectId, downloadGame);
 
 // Routes admin uniquement
 router.post("/addGame", authMiddleware, requireAdmin, validateAddGame, addGame);
