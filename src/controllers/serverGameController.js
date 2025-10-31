@@ -515,7 +515,7 @@ export const downloadGame = async (req, res) => {
     );
     res.setHeader("Content-Length", fileSize);
     res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("X-Accel-Buffering", "no"); // Désactive le buffering Nginx
+    res.setHeader("X-Accel-Buffering", "no");
     res.setHeader("Cache-Control", "no-cache");
 
     // Stream le fichier
