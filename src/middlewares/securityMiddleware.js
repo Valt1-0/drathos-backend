@@ -39,9 +39,13 @@ export const corsConfig = cors({
       }
     }
 
-    // Autoriser localhost sur tous les ports en développement
+    // Autoriser localhost et IPs locales en développement
     if (process.env.NODE_ENV !== "production") {
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      if (origin.includes('localhost') ||
+          origin.includes('127.0.0.1') ||
+          origin.includes('192.168.') ||
+          origin.includes('.local') ||
+          origin.includes('.home.arpa')) {
         return callback(null, true);
       }
     }
@@ -68,7 +72,7 @@ export const corsConfig = cors({
 
 // Configuration Helmet pour sécuriser les headers
 export const helmetConfig = helmet({
-  contentSecurityPolicy: {
+  contentSecurityPolicy: process.env.NODE_ENV === "production" ? {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
@@ -76,6 +80,6 @@ export const helmetConfig = helmet({
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'"],
     },
-  },
+  } : false, // Désactiver CSP en développement pour Electron
   crossOriginEmbedderPolicy: false, // Pour Electron
 });
