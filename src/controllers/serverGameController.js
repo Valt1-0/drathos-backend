@@ -518,9 +518,9 @@ export const downloadGame = async (req, res) => {
     res.setHeader("X-Accel-Buffering", "no");
     res.setHeader("Cache-Control", "no-cache");
 
-    // Stream le fichier
+    // Stream le fichier avec des chunks plus gros pour de meilleures performances sur VPN
     const fileStream = fs.createReadStream(safePath, {
-      highWaterMark: 256 * 1024, // 256KB chunks
+      highWaterMark: 2 * 1024 * 1024, // 2 MB chunks
     });
 
     fileStream.on("open", () => {
