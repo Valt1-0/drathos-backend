@@ -1,23 +1,59 @@
 services:
-  api:
-    container_name: drathos-back
-    image: valt1n/drathos-backend:latest
+  drathos-backend:
+    container_name: drathos-backend
+    image: registry.home.arpa/drathos-backend:latest
     build:
       context: .
     environment:
       - API_PORT=5001
       - MONGODB_URI=mongodb://mongodb:27017/drathos
       - JWT_TOKEN=hide_this
+      - CORS_STRICT_MODE=false
+      - CORS_ALLOWED_ORIGINS=*
+      - GAME_FILES_DIR=serverGames
+      - TWITCH_CLIENT_ID=YOUR_TWITCH_CLIENT_ID
+      - TWITCH_CLIENT_SECRET=YOUR_TWITCH_CLIENT_SECRET
     ports:
       - "8080:5001"
+    volumes:
+      - server-games:/app/serverGames
     depends_on:
       - mongodb
+    networks:
+      - traefik_network
+      - drathos_network
+    ## Traefik Labels
+    labels:
+      - "traefik.enable=true"
+      - "tag=app-external"
+      # Interface web accessible sur le même domaine
+      - "traefik.http.routers.drathos-backend.rule=Host(`drathos.home.arpa`)"
+      - "traefik.http.routers.drathos-backend.entrypoints=https"
+      - "traefik.http.routers.drathos-backend.service=drathos-backend"
+      - "traefik.http.services.drathos-backend.loadbalancer.server.port=5001"
+      - "traefik.http.routers.drathos-backend.tls=true"
+      - "traefik.http.routers.drathos-backend.tls.certresolver=stepca"
+      # Désactiver le buffering pour les gros téléchargements
+      - "traefik.http.middlewares.nobuffering.buffering.maxRequestBodyBytes=0"
+      - "traefik.http.middlewares.nobuffering.buffering.maxResponseBodyBytes=0"
+      - "traefik.http.middlewares.nobuffering.buffering.memRequestBodyBytes=0"
+      - "traefik.http.middlewares.nobuffering.buffering.memResponseBodyBytes=0"
+      - "traefik.http.routers.drathos-backend.middlewares=nobuffering"
 
   mongodb:
     container_name: drathos-db
     image: mongo:4
     volumes:
       - mongo-data:/data/db
+    networks:
+      - drathos_network
 
 volumes:
   mongo-data:
+  server-games:
+
+networks:
+  traefik_network:
+    external: true
+  drathos_network:
+    external: true

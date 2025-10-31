@@ -515,9 +515,13 @@ export const downloadGame = async (req, res) => {
     );
     res.setHeader("Content-Length", fileSize);
     res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("X-Accel-Buffering", "no"); // Désactive le buffering Nginx
+    res.setHeader("Cache-Control", "no-cache");
 
     // Stream le fichier
-    const fileStream = fs.createReadStream(safePath);
+    const fileStream = fs.createReadStream(safePath, {
+      highWaterMark: 256 * 1024, // 256KB chunks
+    });
 
     fileStream.on("open", () => {
       console.log("[downloadGame] Stream ouvert, début envoi...");
