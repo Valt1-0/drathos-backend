@@ -5,7 +5,11 @@ import Game from "../models/serverGameModel.js";
 import InstalledGame from "../models/installedGameModel.js";
 import { fileURLToPath } from "url";
 import { log } from "console";
-import { fetchGameDetails, fetchGenresByIds, extractCompanies } from "./igdbController.js";
+import {
+  fetchGameDetails,
+  fetchGenresByIds,
+  extractCompanies,
+} from "./igdbController.js";
 
 import {
   sanitizePath,
@@ -25,7 +29,7 @@ if (!fs.existsSync(GAME_FILES_DIR)) {
 }
 
 // Dossier temporaire pour les uploads
-const TEMP_UPLOAD_DIR = path.join(GAME_FILES_DIR, 'temp');
+const TEMP_UPLOAD_DIR = path.join(GAME_FILES_DIR, "temp");
 if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 }
@@ -40,7 +44,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     // Nom temporaire unique pour éviter les collisions
     cb(null, `upload-${Date.now()}-${file.originalname}`);
-  }
+  },
 });
 
 const fileFilter = (req, file, cb) => {
@@ -55,8 +59,8 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 200 * 1024 * 1024 * 1024 // 200 GB max
-  }
+    fileSize: 200 * 1024 * 1024 * 1024, // 200 GB max
+  },
 }).single("zipFile");
 
 export const addGame = (req, res) => {
@@ -72,9 +76,14 @@ export const addGame = (req, res) => {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
-          console.log("[addGame] 🧹 Fichier temporaire supprimé après erreur Multer");
+          console.log(
+            "[addGame] 🧹 Fichier temporaire supprimé après erreur Multer"
+          );
         } catch (unlinkError) {
-          console.error("[addGame] ⚠️ Impossible de supprimer le fichier temporaire:", unlinkError);
+          console.error(
+            "[addGame] ⚠️ Impossible de supprimer le fichier temporaire:",
+            unlinkError
+          );
         }
       }
 
@@ -105,7 +114,9 @@ export const addGame = (req, res) => {
       const genres = await fetchGenresByIds(genreIds);
 
       // Extraire les informations de développeur et éditeur
-      const { developer, publisher } = extractCompanies(gameData.involved_companies);
+      const { developer, publisher } = extractCompanies(
+        gameData.involved_companies
+      );
 
       const originalName = path.parse(req.file.originalname).name;
       const extension = path.extname(req.file.originalname).toLowerCase();
@@ -179,7 +190,10 @@ export const addGame = (req, res) => {
           fs.unlinkSync(req.file.path);
           console.log("[addGame] 🧹 Fichier temporaire supprimé après erreur");
         } catch (unlinkError) {
-          console.error("[addGame] ⚠️ Impossible de supprimer le fichier temporaire:", unlinkError);
+          console.error(
+            "[addGame] ⚠️ Impossible de supprimer le fichier temporaire:",
+            unlinkError
+          );
         }
       }
 
@@ -241,9 +255,14 @@ export const updateGame = (req, res) => {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
-          console.log("[updateGame] 🧹 Fichier temporaire supprimé après erreur Multer");
+          console.log(
+            "[updateGame] 🧹 Fichier temporaire supprimé après erreur Multer"
+          );
         } catch (unlinkError) {
-          console.error("[updateGame] ⚠️ Impossible de supprimer le fichier temporaire:", unlinkError);
+          console.error(
+            "[updateGame] ⚠️ Impossible de supprimer le fichier temporaire:",
+            unlinkError
+          );
         }
       }
 
@@ -314,9 +333,14 @@ export const updateGame = (req, res) => {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
-          console.log("[updateGame] 🧹 Fichier temporaire supprimé après erreur");
+          console.log(
+            "[updateGame] 🧹 Fichier temporaire supprimé après erreur"
+          );
         } catch (unlinkError) {
-          console.error("[updateGame] ⚠️ Impossible de supprimer le fichier temporaire:", unlinkError);
+          console.error(
+            "[updateGame] ⚠️ Impossible de supprimer le fichier temporaire:",
+            unlinkError
+          );
         }
       }
 
@@ -332,7 +356,12 @@ export const deleteGame = async (req, res) => {
     const gameId = req.params.id;
     const adminId = req.user.id;
 
-    console.log("[deleteGame] 🚀 Début suppression - ID:", gameId, "Admin:", adminId);
+    console.log(
+      "[deleteGame] 🚀 Début suppression - ID:",
+      gameId,
+      "Admin:",
+      adminId
+    );
 
     // 1️⃣ Vérifier l'existence du jeu
     const game = await Game.findById(gameId);
@@ -428,7 +457,10 @@ export const deleteGame = async (req, res) => {
     let statusCode = 500;
     let errorCode = "DELETE_FAILED";
 
-    if (error.message.includes("interdit") || error.message.includes("introuvable")) {
+    if (
+      error.message.includes("interdit") ||
+      error.message.includes("introuvable")
+    ) {
       statusCode = 403;
       errorCode = "PATH_VALIDATION_ERROR";
     } else if (error.name === "CastError") {
@@ -448,29 +480,64 @@ export const deleteGame = async (req, res) => {
 export const downloadGame = async (req, res) => {
   try {
     const game = await Game.findById(req.params.id);
-    console.log("Requested download for ID:", req.params.id); // 👈 Ici
+    console.log(
+      "[downloadGame] Requête de téléchargement - ID:",
+      req.params.id
+    );
 
     if (!game) {
-      console.error("[downloadGame] Game not found for ID:", req.params.id);
+      console.error("[downloadGame] Jeu non trouvé - ID:", req.params.id);
       return res.status(404).json({ message: "Game not found." });
     }
 
-    // 🔒 VALIDATION CRITIQUE avant le téléchargement
     const safePath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
+    console.log("[downloadGame] Fichier validé:", safePath);
 
-    console.log("[downloadGame] ✅ Serving file:", safePath);
+    if (!fs.existsSync(safePath)) {
+      console.error("[downloadGame] Fichier introuvable:", safePath);
+      return res.status(404).json({ message: "File not found." });
+    }
 
-    // Téléchargement sécurisé
-    res.download(safePath, game.zipFileName, (err) => {
-      if (err) {
-        console.error("[downloadGame] Error:", err);
-        if (!res.headersSent) {
-          res.status(500).json({ message: "Download error." });
-        }
+    const stat = fs.statSync(safePath);
+    const fileSize = stat.size;
+
+    console.log(
+      `[downloadGame] Taille fichier: ${(fileSize / (1024 * 1024)).toFixed(
+        2
+      )} MB`
+    );
+
+    // Headers pour le téléchargement
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${game.zipFileName}"`
+    );
+    res.setHeader("Content-Length", fileSize);
+    res.setHeader("Accept-Ranges", "bytes");
+
+    // Stream le fichier
+    const fileStream = fs.createReadStream(safePath);
+
+    fileStream.on("open", () => {
+      console.log("[downloadGame] Stream ouvert, début envoi...");
+    });
+
+    fileStream.on("error", (err) => {
+      console.error("[downloadGame] Erreur stream:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Stream error." });
       }
     });
+
+    fileStream.on("end", () => {
+      console.log("[downloadGame] Stream terminé avec succès");
+    });
+
+    // Pipe le stream vers la réponse
+    fileStream.pipe(res);
   } catch (error) {
-    console.error("[downloadGame] Error:", error.message);
+    console.error("[downloadGame] Erreur:", error.message);
 
     if (
       error.message.includes("introuvable") ||
@@ -479,7 +546,9 @@ export const downloadGame = async (req, res) => {
       return res.status(404).json({ message: error.message });
     }
 
-    res.status(500).json({ message: "Error downloading game." });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Error downloading game." });
+    }
   }
 };
 
