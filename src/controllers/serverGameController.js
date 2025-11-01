@@ -159,7 +159,7 @@ export const addGame = (req, res) => {
         rating: gameData.rating || 0,
         aggregatedRating: gameData.aggregated_rating || 0,
         coverUrl:
-          gameData.cover?.url.replace(/t_thumb/g, "t_cover_big_2x") || "",
+          gameData.cover?.url ? `https:${gameData.cover.url.replace(/t_thumb/g, "t_cover_big_2x")}` : "",
         igdbId: gameData.id,
 
         // Ajouter les informations de développeur et éditeur
