@@ -59,6 +59,7 @@ Icon
 *.tmp
 *.temp
 .cache/
+serverGames/
 
 # Test coverage
 coverage/
