@@ -20,6 +20,7 @@ import userRoute from "./src/routes/userRoutes.js";
 import serverGameRoute from "./src/routes/serverGameRoutes.js";
 import igdbRoute from "./src/routes/igdbRoutes.js";
 import installedGamesRoute from "./src/routes/installedGamesRoutes.js";
+import collectionRoute from "./src/routes/collectionRoutes.js";
 
 // Services de cleanup
 import { cleanupStuckSessions } from "./src/controllers/installedGameController.js";
@@ -61,6 +62,7 @@ const startServer = async () => {
     app.use("/api/serverGame", serverGameRoute);
     app.use("/api/igdb", igdbRoute);
     app.use("/api/installedGames", installedGamesRoute);
+    app.use("/api/collections", collectionRoute);
 
     // Route racine
     app.get("/", (req, res) => {
