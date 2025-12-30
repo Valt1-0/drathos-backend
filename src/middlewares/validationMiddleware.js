@@ -77,6 +77,37 @@ export const validateAddGame = [
     .isBoolean()
     .withMessage("isPublic doit être un booléen"),
 
+  // Nouveau format multiplayer (objet)
+  body("multiplayer.enabled")
+    .optional()
+    .isBoolean()
+    .withMessage("multiplayer.enabled doit être un booléen"),
+
+  body("multiplayer.type")
+    .optional()
+    .isIn(['online', 'local', 'both', null, ''])
+    .withMessage("multiplayer.type doit être 'online', 'local' ou 'both'"),
+
+  body("multiplayer.maxPlayers")
+    .optional()
+    .custom((value) => value === null || value === '' || (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 999))
+    .withMessage("multiplayer.maxPlayers doit être un nombre entre 1 et 999"),
+
+  body("multiplayer.modes")
+    .optional()
+    .custom((value) => {
+      if (!value) return true;
+      if (typeof value === 'string') {
+        try {
+          value = JSON.parse(value);
+        } catch (e) {
+          return false;
+        }
+      }
+      return Array.isArray(value) && value.every(mode => ['co-op', 'pvp'].includes(mode));
+    })
+    .withMessage("multiplayer.modes doit être un tableau contenant 'co-op' et/ou 'pvp'"),
+
   handleValidationErrors,
 ];
 

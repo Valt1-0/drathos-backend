@@ -92,7 +92,7 @@ export const addGame = (req, res) => {
 
     console.log("[addGame] ✅ Fichier uploadé:", req.file?.originalname); // ← AJOUTER
 
-    const { version, isPublic, igdbId, executableName } = req.body;
+    const { version, isPublic, multiplayer, igdbId, executableName } = req.body;
 
     if (!igdbId) {
       console.error("[addGame] ❌ IGDB ID manquant"); // ← AJOUTER
@@ -127,13 +127,19 @@ export const addGame = (req, res) => {
       console.log("[addGame] 🧹 Nom nettoyé:", cleanName); // ← AJOUTER
 
       const filename = `${cleanName}${extension}`;
-      console.log("[addGame] 📄 Nom final:", filename); // ← AJOUTER
+      console.log("[addGame] 📄 Nom final:", filename);
 
+      console.log("[addGame] 🔍 Validation du nom de fichier...");
       validateFileName(filename);
+      console.log("[addGame] ✅ Nom de fichier validé");
 
+      console.log("[addGame] 🔍 Sanitization du chemin...");
       const safePath = sanitizePath(GAME_FILES_DIR, filename);
+      console.log("[addGame] ✅ Chemin sanitizé:", safePath);
 
+      console.log("[addGame] 🔍 Vérification existence fichier...");
       if (fs.existsSync(safePath)) {
+        console.log("[addGame] ❌ Fichier existe déjà:", safePath);
         // Supprimer le fichier temporaire
         fs.unlinkSync(req.file.path);
         return res.status(400).json({
@@ -141,7 +147,9 @@ export const addGame = (req, res) => {
           message: "Un fichier avec ce nom existe déjà",
         });
       }
+      console.log("[addGame] ✅ Fichier n'existe pas, OK");
 
+      console.log("[addGame] 📦 Déplacement du fichier...");
       // Déplacer le fichier du dossier temp vers sa destination finale
       fs.renameSync(req.file.path, safePath);
 
@@ -171,10 +179,32 @@ export const addGame = (req, res) => {
         version: version || "1.0.0",
         sizeMB: +(req.file.size / (1024 * 1024)).toFixed(2),
         isPublic: isPublic !== undefined ? isPublic : true,
+        multiplayer: multiplayer ? (() => {
+          const parsed = typeof multiplayer === 'string' ? JSON.parse(multiplayer) : multiplayer;
+          return {
+            enabled: parsed.enabled === "true" || parsed.enabled === true,
+            type: parsed.type || null,
+            maxPlayers: parsed.maxPlayers ? parseInt(parsed.maxPlayers) : null,
+            modes: Array.isArray(parsed.modes) ? parsed.modes :
+                   (parsed.modes ? JSON.parse(parsed.modes) : [])
+          };
+        })() : {
+          enabled: false,
+          type: null,
+          maxPlayers: null,
+          modes: []
+        },
         executableName: executableName || null, // Exécutable défini par l'admin
       });
 
+      console.log("[addGame] 💾 Sauvegarde dans MongoDB...");
+      console.log("[addGame] 📊 Données du jeu:", {
+        name: newGame.name,
+        igdbId: newGame.igdbId,
+        version: newGame.version
+      });
       await newGame.save();
+      console.log("[addGame] ✅ Jeu sauvegardé dans MongoDB");
 
       res.status(201).json({
         error: false,

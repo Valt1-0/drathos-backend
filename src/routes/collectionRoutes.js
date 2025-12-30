@@ -8,13 +8,7 @@ import {
   updateCollection,
   deleteCollection,
   addGamesToCollection,
-  removeGamesFromCollection,
-  reorderGames,
-  togglePin,
-  getInstalledGames,
-  getNotInstalledGames,
-  getRecentlyPlayed,
-  getMostPlayed
+  removeGamesFromCollection
 } from "../controllers/collectionController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
@@ -33,15 +27,5 @@ router.delete("/:id/delete", deleteCollection);
 // ==================== GESTION DES JEUX ====================
 router.post("/:id/games/add", addGamesToCollection);
 router.delete("/:id/games/remove", removeGamesFromCollection);
-router.patch("/:id/games/reorder", reorderGames);
-
-// ==================== ACTIONS ====================
-router.patch("/:id/toggle-pin", togglePin);
-
-// ==================== SMART COLLECTIONS ====================
-router.get("/smart/installed", getInstalledGames);
-router.get("/smart/not-installed", getNotInstalledGames);
-router.get("/smart/recent", getRecentlyPlayed);
-router.get("/smart/most-played", getMostPlayed);
 
 export default router;
