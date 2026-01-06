@@ -21,6 +21,7 @@ import serverGameRoute from "./src/routes/serverGameRoutes.js";
 import igdbRoute from "./src/routes/igdbRoutes.js";
 import installedGamesRoute from "./src/routes/installedGamesRoutes.js";
 import collectionRoute from "./src/routes/collectionRoutes.js";
+import modRoute from "./src/routes/modRoutes.js";
 
 // Services de cleanup
 import { cleanupStuckSessions } from "./src/controllers/installedGameController.js";
@@ -63,6 +64,7 @@ const startServer = async () => {
     app.use("/api/igdb", igdbRoute);
     app.use("/api/installedGames", installedGamesRoute);
     app.use("/api/collections", collectionRoute);
+    app.use("/api/mods", modRoute);
 
     // Route racine
     app.get("/", (req, res) => {
