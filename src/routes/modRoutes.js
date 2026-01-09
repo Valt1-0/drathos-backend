@@ -3,29 +3,34 @@ import express from "express";
 import {
   uploadMod,
   getModsByGame,
+  getModById,
   downloadMod,
   getInstalledMods,
   markAsInstalled,
   uninstallMod,
   toggleMod,
+  deleteMod,
 } from "../controllers/modController.js";
 
-import { validateObjectId } from "../middlewares/validationMiddleware.js";
 import { authMiddleware, requireAdmin } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Routes publiques (pas d'auth requise)
-router.get("/game/:gameId", validateObjectId, getModsByGame);
+// Routes publiques
+router.get("/game/:gameId", getModsByGame);
 
-// Routes nécessitant authentication
-router.get("/download/:modId", authMiddleware, validateObjectId, downloadMod);
+// Routes nécessitant authentication (ordre important : routes spécifiques avant les génériques)
+router.get("/download/:modId", authMiddleware, downloadMod);
 router.get("/installed", authMiddleware, getInstalledMods);
 router.post("/install", authMiddleware, markAsInstalled);
-router.delete("/uninstall/:modId", authMiddleware, validateObjectId, uninstallMod);
-router.patch("/toggle/:modId", authMiddleware, validateObjectId, toggleMod);
+router.delete("/uninstall/:modId", authMiddleware, uninstallMod);
+router.patch("/toggle/:modId", authMiddleware, toggleMod);
 
-// Routes admin seulement
+// Routes admin (avant la route générique /:modId)
 router.post("/upload", authMiddleware, requireAdmin, uploadMod);
+router.delete("/delete/:modId", authMiddleware, requireAdmin, deleteMod);
+
+// Route générique en dernier
+router.get("/:modId", authMiddleware, getModById);
 
 export default router;

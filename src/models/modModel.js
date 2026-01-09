@@ -12,6 +12,7 @@ const ModSchema = new mongoose.Schema({
   version: { type: String, default: "1.0.0" },
   zipFileName: { type: String, required: true },
   zipFilePath: { type: String, required: true },
+  installPath: { type: String, default: "Mods" },
   sizeMB: { type: Number },
   modType: {
     type: String,

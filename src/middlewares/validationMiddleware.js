@@ -132,6 +132,5 @@ export const validateUpdateGame = [
 // Validation ID MongoDB générique
 export const validateObjectId = [
   param("id").isMongoId().withMessage("ID invalide"),
-
   handleValidationErrors,
 ];
