@@ -61,7 +61,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 * 1024, // 5 GB max
+    fileSize: 20 * 1024 * 1024 * 1024, // 20 GB max
   },
 }).single("modFile");
 
@@ -322,7 +322,6 @@ export const markAsInstalled = async (req, res) => {
       userId: req.user.id,
       modId,
       gameId,
-      enabled: true,
       installedAt: new Date(),
     });
 
@@ -367,49 +366,6 @@ export const uninstallMod = async (req, res) => {
     res.status(500).json({
       error: true,
       message: "Error uninstalling mod.",
-      details: error.message,
-    });
-  }
-};
-
-// Toggle activation d'un mod
-export const toggleMod = async (req, res) => {
-  try {
-    const { enabled } = req.body;
-
-    if (typeof enabled !== "boolean") {
-      return res.status(400).json({
-        error: true,
-        message: "Invalid enabled parameter.",
-      });
-    }
-
-    const installedMod = await InstalledMod.findOne({
-      userId: req.user.id,
-      modId: req.params.modId
-    });
-
-    if (!installedMod) {
-      return res.status(404).json({
-        error: true,
-        message: "Installed mod not found.",
-      });
-    }
-
-    installedMod.enabled = enabled;
-    installedMod.lastUsed = new Date();
-    await installedMod.save();
-
-    res.status(200).json({
-      error: false,
-      message: `Mod ${enabled ? "enabled" : "disabled"} successfully.`,
-      installedMod,
-    });
-  } catch (error) {
-    console.error("[toggleMod] Error:", error.message);
-    res.status(500).json({
-      error: true,
-      message: "Error toggling mod.",
       details: error.message,
     });
   }

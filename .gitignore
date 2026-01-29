@@ -72,3 +72,9 @@ pnpm-lock.yaml
 
 # Electron specific
 *.asar
+
+# Compressed archives
+*.rar
+*.zip
+*.7z
+

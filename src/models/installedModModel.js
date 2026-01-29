@@ -17,17 +17,9 @@ const installedModSchema = new mongoose.Schema(
       ref: "ServerGame",
       required: true,
     },
-    enabled: {
-      type: Boolean,
-      default: true,
-    },
     installedAt: {
       type: Date,
       default: Date.now,
-    },
-    lastUsed: {
-      type: Date,
-      default: null,
     },
   },
   {

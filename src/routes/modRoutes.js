@@ -8,7 +8,6 @@ import {
   getInstalledMods,
   markAsInstalled,
   uninstallMod,
-  toggleMod,
   deleteMod,
 } from "../controllers/modController.js";
 
@@ -16,15 +15,11 @@ import { authMiddleware, requireAdmin } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Routes publiques
-router.get("/game/:gameId", getModsByGame);
-
-// Routes nécessitant authentication (ordre important : routes spécifiques avant les génériques)
+router.get("/game/:gameId", authMiddleware, getModsByGame);
 router.get("/download/:modId", authMiddleware, downloadMod);
 router.get("/installed", authMiddleware, getInstalledMods);
 router.post("/install", authMiddleware, markAsInstalled);
 router.delete("/uninstall/:modId", authMiddleware, uninstallMod);
-router.patch("/toggle/:modId", authMiddleware, toggleMod);
 
 // Routes admin (avant la route générique /:modId)
 router.post("/upload", authMiddleware, requireAdmin, uploadMod);
