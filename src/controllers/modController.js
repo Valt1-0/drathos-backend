@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const MOD_FILES_DIR =
-  process.env.MOD_FILES_DIR || path.join(__dirname, "../../serverMods/");
+  process.env.MOD_FILES_DIR || path.join(__dirname, "../../serverData/serverMods/");
 
 if (!fs.existsSync(MOD_FILES_DIR)) {
   fs.mkdirSync(MOD_FILES_DIR, { recursive: true });

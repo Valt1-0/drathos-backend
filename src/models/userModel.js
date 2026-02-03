@@ -32,6 +32,10 @@ const UserSchema = new mongoose.Schema(
       enum: ["admin", "moderator", "member"],
       default: "member",
     },
+    isProfilePublic: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true, // Automatically adds `createdAt` and `updatedAt`

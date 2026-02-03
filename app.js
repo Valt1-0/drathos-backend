@@ -2,6 +2,11 @@ import "dotenv/config.js";
 import express from "express";
 import { connect } from "./src/db/mongoConnect.js";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Importation des middlewares de sécurité
 import {
@@ -42,6 +47,13 @@ const startServer = async () => {
     if (!fs.existsSync("logs")) {
       fs.mkdirSync("logs");
     }
+
+    // 📁 Servir les fichiers statiques (serverData) AVANT Helmet pour éviter les restrictions CORS
+    app.use("/serverData", (req, res, next) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      next();
+    }, express.static(path.join(__dirname, "serverData")));
 
     // 🔒 MIDDLEWARES DE SÉCURITÉ (ORDRE IMPORTANT)
     app.use(helmetConfig); // Headers de sécurité

@@ -22,7 +22,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const GAME_FILES_DIR =
-  process.env.GAME_FILES_DIR || path.join(__dirname, "../../serverGames/");
+  process.env.GAME_FILES_DIR || path.join(__dirname, "../../serverData/serverGames/");
 
 if (!fs.existsSync(GAME_FILES_DIR)) {
   fs.mkdirSync(GAME_FILES_DIR, { recursive: true });

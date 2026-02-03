@@ -59,7 +59,11 @@ Icon
 *.tmp
 *.temp
 .cache/
+
+# Server data (games, mods, user uploads)
+serverData/
 serverGames/
+serverMods/
 
 # Test coverage
 coverage/

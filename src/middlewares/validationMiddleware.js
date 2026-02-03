@@ -134,3 +134,21 @@ export const validateObjectId = [
   param("id").isMongoId().withMessage("ID invalide"),
   handleValidationErrors,
 ];
+
+// Validation userId MongoDB
+export const validateUserId = [
+  param("userId").isMongoId().withMessage("User ID invalide"),
+  handleValidationErrors,
+];
+
+// Validation role update
+export const validateRoleUpdate = [
+  param("userId").isMongoId().withMessage("User ID invalide"),
+  body("role")
+    .trim()
+    .notEmpty()
+    .withMessage("Role requis")
+    .isIn(["admin", "moderator", "member"])
+    .withMessage("Role invalide. Doit être: admin, moderator, ou member"),
+  handleValidationErrors,
+];
