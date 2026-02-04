@@ -22,13 +22,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const GAME_FILES_DIR =
-  process.env.GAME_FILES_DIR || path.join(__dirname, "../../serverData/serverGames/");
+  process.env.GAME_FILES_DIR ||
+  path.join(__dirname, "../../serverData/serverGames/");
 
 if (!fs.existsSync(GAME_FILES_DIR)) {
   fs.mkdirSync(GAME_FILES_DIR, { recursive: true });
 }
 
-// Dossier temporaire pour les uploads
 const TEMP_UPLOAD_DIR = path.join(GAME_FILES_DIR, "temp");
 if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
@@ -36,13 +36,11 @@ if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
 
 const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz"];
 
-// Utiliser diskStorage pour éviter de charger les gros fichiers en RAM
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, TEMP_UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    // Nom temporaire unique pour éviter les collisions
     cb(null, `upload-${Date.now()}-${file.originalname}`);
   },
 });
@@ -59,12 +57,12 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 200 * 1024 * 1024 * 1024, // 200 GB max
+    fileSize: 200 * 1024 * 1024 * 1024,
   },
 }).single("zipFile");
 
 export const addGame = (req, res) => {
-  console.log("[addGame] 🚀 Requête reçue"); // ← AJOUTER
+  console.log("[addGame] 🚀 Requête reçue");
 
   upload(req, res, async (err) => {
     console.log("[addGame] 📦 Multer callback appelé");
@@ -72,17 +70,16 @@ export const addGame = (req, res) => {
     if (err) {
       console.error("[addGame] ❌ Erreur Multer:", err.message);
 
-      // Nettoyer le fichier temporaire si l'upload a échoué mais qu'un fichier partiel existe
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
           console.log(
-            "[addGame] 🧹 Fichier temporaire supprimé après erreur Multer"
+            "[addGame] 🧹 Fichier temporaire supprimé après erreur Multer",
           );
         } catch (unlinkError) {
           console.error(
             "[addGame] ⚠️ Impossible de supprimer le fichier temporaire:",
-            unlinkError
+            unlinkError,
           );
         }
       }
@@ -90,24 +87,24 @@ export const addGame = (req, res) => {
       return res.status(400).json({ error: true, message: err.message });
     }
 
-    console.log("[addGame] ✅ Fichier uploadé:", req.file?.originalname); // ← AJOUTER
+    console.log("[addGame] ✅ Fichier uploadé:", req.file?.originalname);
 
     const { version, isPublic, multiplayer, igdbId, executableName } = req.body;
 
     if (!igdbId) {
-      console.error("[addGame] ❌ IGDB ID manquant"); // ← AJOUTER
+      console.error("[addGame] ❌ IGDB ID manquant");
       return res.status(400).json({ error: true, message: "Missing IGDB ID." });
     }
 
     if (!req.file) {
-      console.error("[addGame] ❌ Fichier manquant"); // ← AJOUTER
+      console.error("[addGame] ❌ Fichier manquant");
       return res
         .status(400)
         .json({ error: true, message: "Missing compressed file." });
     }
 
     try {
-      console.log("[addGame] 🔍 Récupération données IGDB pour:", igdbId); // ← AJOUTER
+      console.log("[addGame] 🔍 Récupération données IGDB pour:", igdbId);
       const gameData = await fetchGameDetails(igdbId);
 
       const genreIds = (gameData.genres || []).map((g) => g.id);
@@ -115,16 +112,13 @@ export const addGame = (req, res) => {
 
       // Extraire les informations de développeur et éditeur
       const { developer, publisher } = extractCompanies(
-        gameData.involved_companies
+        gameData.involved_companies,
       );
 
       const originalName = path.parse(req.file.originalname).name;
       const extension = path.extname(req.file.originalname).toLowerCase();
 
-      console.log("[addGame] 📝 Nom original:", originalName); // ← AJOUTER
-
       const cleanName = cleanFileName(originalName);
-      console.log("[addGame] 🧹 Nom nettoyé:", cleanName); // ← AJOUTER
 
       const filename = `${cleanName}${extension}`;
       console.log("[addGame] 📄 Nom final:", filename);
@@ -140,7 +134,6 @@ export const addGame = (req, res) => {
       console.log("[addGame] 🔍 Vérification existence fichier...");
       if (fs.existsSync(safePath)) {
         console.log("[addGame] ❌ Fichier existe déjà:", safePath);
-        // Supprimer le fichier temporaire
         fs.unlinkSync(req.file.path);
         return res.status(400).json({
           error: true,
@@ -150,7 +143,6 @@ export const addGame = (req, res) => {
       console.log("[addGame] ✅ Fichier n'existe pas, OK");
 
       console.log("[addGame] 📦 Déplacement du fichier...");
-      // Déplacer le fichier du dossier temp vers sa destination finale
       fs.renameSync(req.file.path, safePath);
 
       console.log(`[addGame] ✅ Fichier sauvegardé: ${safePath}`);
@@ -166,42 +158,50 @@ export const addGame = (req, res) => {
         platforms: gameData.platforms?.map((p) => p.name) || [],
         rating: gameData.rating || 0,
         aggregatedRating: gameData.aggregated_rating || 0,
-        coverUrl:
-          gameData.cover?.url ? `https:${gameData.cover.url.replace(/t_thumb/g, "t_cover_big_2x")}` : "",
+        coverUrl: gameData.cover?.url
+          ? `https:${gameData.cover.url.replace(/t_thumb/g, "t_cover_big_2x")}`
+          : "",
         igdbId: gameData.id,
-
-        // Ajouter les informations de développeur et éditeur
         developer: developer || null,
         publisher: publisher || null,
-
         zipFileName: filename,
         zipFilePath: safePath,
         version: version || "1.0.0",
         sizeMB: +(req.file.size / (1024 * 1024)).toFixed(2),
         isPublic: isPublic !== undefined ? isPublic : true,
-        multiplayer: multiplayer ? (() => {
-          const parsed = typeof multiplayer === 'string' ? JSON.parse(multiplayer) : multiplayer;
-          return {
-            enabled: parsed.enabled === "true" || parsed.enabled === true,
-            type: parsed.type || null,
-            maxPlayers: parsed.maxPlayers ? parseInt(parsed.maxPlayers) : null,
-            modes: Array.isArray(parsed.modes) ? parsed.modes :
-                   (parsed.modes ? JSON.parse(parsed.modes) : [])
-          };
-        })() : {
-          enabled: false,
-          type: null,
-          maxPlayers: null,
-          modes: []
-        },
-        executableName: executableName || null, // Exécutable défini par l'admin
+        multiplayer: multiplayer
+          ? (() => {
+              const parsed =
+                typeof multiplayer === "string"
+                  ? JSON.parse(multiplayer)
+                  : multiplayer;
+              return {
+                enabled: parsed.enabled === "true" || parsed.enabled === true,
+                type: parsed.type || null,
+                maxPlayers: parsed.maxPlayers
+                  ? parseInt(parsed.maxPlayers)
+                  : null,
+                modes: Array.isArray(parsed.modes)
+                  ? parsed.modes
+                  : parsed.modes
+                    ? JSON.parse(parsed.modes)
+                    : [],
+              };
+            })()
+          : {
+              enabled: false,
+              type: null,
+              maxPlayers: null,
+              modes: [],
+            },
+        executableName: executableName || null,
       });
 
       console.log("[addGame] 💾 Sauvegarde dans MongoDB...");
       console.log("[addGame] 📊 Données du jeu:", {
         name: newGame.name,
         igdbId: newGame.igdbId,
-        version: newGame.version
+        version: newGame.version,
       });
       await newGame.save();
       console.log("[addGame] ✅ Jeu sauvegardé dans MongoDB");
@@ -214,7 +214,6 @@ export const addGame = (req, res) => {
     } catch (error) {
       console.error("[addGame] 💥 Error:", error);
 
-      // Nettoyer le fichier temporaire en cas d'erreur
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
@@ -222,12 +221,11 @@ export const addGame = (req, res) => {
         } catch (unlinkError) {
           console.error(
             "[addGame] ⚠️ Impossible de supprimer le fichier temporaire:",
-            unlinkError
+            unlinkError,
           );
         }
       }
 
-      // Si c'est une erreur de validation, renvoyer un message clair
       if (
         error.message &&
         (error.message.includes("invalide") ||
@@ -253,7 +251,7 @@ export const getAllGames = async (req, res) => {
     const games = await Game.find().sort({ addedDate: -1 });
     res.status(200).json(games);
   } catch (error) {
-    console.error("[getAllGames] Error fetching games:", error.message); // Log error
+    console.error("[getAllGames] Error fetching games:", error.message);
     res
       .status(500)
       .json({ message: "Error fetching games.", error: error.message });
@@ -264,12 +262,12 @@ export const getGameById = async (req, res) => {
   try {
     const game = await Game.findById(req.params.id);
     if (!game) {
-      console.error("[getGameById] Game not found for ID:", req.params.id); // Log missing game
+      console.error("[getGameById] Game not found for ID:", req.params.id);
       return res.status(404).json({ message: "Game not found." });
     }
     res.status(200).json(game);
   } catch (error) {
-    console.error("[getGameById] Error fetching game:", error.message); // Log error
+    console.error("[getGameById] Error fetching game:", error.message);
     res
       .status(500)
       .json({ message: "Error fetching game.", error: error.message });
@@ -280,18 +278,16 @@ export const updateGame = (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
       console.error("[updateGame] Upload error:", err.message);
-
-      // Nettoyer le fichier temporaire si l'upload a échoué
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
           console.log(
-            "[updateGame] 🧹 Fichier temporaire supprimé après erreur Multer"
+            "[updateGame] 🧹 Fichier temporaire supprimé après erreur Multer",
           );
         } catch (unlinkError) {
           console.error(
             "[updateGame] ⚠️ Impossible de supprimer le fichier temporaire:",
-            unlinkError
+            unlinkError,
           );
         }
       }
@@ -308,29 +304,23 @@ export const updateGame = (req, res) => {
         return res.status(404).json({ message: "Game not found." });
       }
 
-      log("[updateGame] Game found:", game.zipFileName); // Log found game
+      log("[updateGame] Game found:", game.zipFileName);
 
-      // Champs textuels
       if (title) game.title = title.trim();
       if (description) game.description = description.trim();
       if (releaseDate) game.releaseDate = new Date(releaseDate);
       if (genre) game.genres = [genre.toLowerCase()];
 
-      // Nouveau fichier ZIP ?
       if (req.file) {
-        // 🔒 SÉCURISATION DU NOUVEAU FICHIER
         const originalName = path.parse(req.file.originalname).name;
         const extension = path.extname(req.file.originalname).toLowerCase();
         const cleanName = cleanFileName(originalName);
         const filename = `${cleanName}${extension}`;
 
-        // 🔒 VALIDER
         validateFileName(filename);
 
-        // 🔒 SÉCURISER le nouveau chemin
         const newPath = sanitizePath(GAME_FILES_DIR, filename);
 
-        // Supprimer l'ancien fichier de manière sécurisée
         try {
           const oldPath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
           if (fs.existsSync(oldPath)) {
@@ -340,16 +330,14 @@ export const updateGame = (req, res) => {
         } catch (error) {
           console.warn(
             "[updateGame] ⚠️ Impossible de supprimer l'ancien fichier:",
-            error.message
+            error.message,
           );
         }
 
-        // Déplacer le nouveau fichier du dossier temp vers sa destination finale
         fs.renameSync(req.file.path, newPath);
 
         console.log("[updateGame] ✅ Nouveau fichier sauvegardé:", newPath);
 
-        // Mettre à jour les champs
         game.zipFileName = filename;
         game.zipFilePath = newPath;
         game.sizeMB = +(req.file.size / (1024 * 1024)).toFixed(2);
@@ -359,17 +347,16 @@ export const updateGame = (req, res) => {
     } catch (error) {
       console.error("[updateGame] Error updating game:", error.message);
 
-      // Nettoyer le fichier temporaire en cas d'erreur
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
         try {
           fs.unlinkSync(req.file.path);
           console.log(
-            "[updateGame] 🧹 Fichier temporaire supprimé après erreur"
+            "[updateGame] 🧹 Fichier temporaire supprimé après erreur",
           );
         } catch (unlinkError) {
           console.error(
             "[updateGame] ⚠️ Impossible de supprimer le fichier temporaire:",
-            unlinkError
+            unlinkError,
           );
         }
       }
@@ -390,10 +377,9 @@ export const deleteGame = async (req, res) => {
       "[deleteGame] 🚀 Début suppression - ID:",
       gameId,
       "Admin:",
-      adminId
+      adminId,
     );
 
-    // 1️⃣ Vérifier l'existence du jeu
     const game = await Game.findById(gameId);
     if (!game) {
       console.error("[deleteGame] ❌ Jeu non trouvé - ID:", gameId);
@@ -406,14 +392,13 @@ export const deleteGame = async (req, res) => {
 
     console.log("[deleteGame] ✅ Jeu trouvé:", game.name);
 
-    // 2️⃣ Vérifier qu'aucune installation n'est active
     const activeInstallations = await InstalledGame.countDocuments({
       serverGameId: gameId,
     });
 
     if (activeInstallations > 0) {
       console.error(
-        `[deleteGame] ⚠️ ${activeInstallations} installation(s) active(s) trouvée(s)`
+        `[deleteGame] ⚠️ ${activeInstallations} installation(s) active(s) trouvée(s)`,
       );
       return res.status(409).json({
         error: true,
@@ -425,19 +410,16 @@ export const deleteGame = async (req, res) => {
 
     console.log("[deleteGame] ✅ Aucune installation active");
 
-    // 3️⃣ Supprimer les enregistrements InstalledGame
     const deletedInstalled = await InstalledGame.deleteMany({
       serverGameId: gameId,
     });
     console.log(
-      `[deleteGame] ✅ ${deletedInstalled.deletedCount} enregistrements InstalledGame supprimés`
+      `[deleteGame] ✅ ${deletedInstalled.deletedCount} enregistrements InstalledGame supprimés`,
     );
 
-    // 5️⃣ Supprimer le jeu de la base de données
     await Game.findByIdAndDelete(gameId);
     console.log("[deleteGame] ✅ Jeu supprimé de la BD");
 
-    // 6️⃣ Supprimer le fichier ZIP
     let fileDeletedSuccessfully = false;
     let fileErrorDetails = null;
 
@@ -455,13 +437,12 @@ export const deleteGame = async (req, res) => {
       fileErrorDetails = fileError.message;
       console.error(
         "[deleteGame] ⚠️ Erreur suppression fichier:",
-        fileError.message
+        fileError.message,
       );
     }
 
     console.log("[deleteGame] ✅ Suppression complétée avec succès");
 
-    // Répondre au client avec tous les détails
     res.status(200).json({
       error: false,
       message: "Game deleted successfully.",
@@ -512,7 +493,7 @@ export const downloadGame = async (req, res) => {
     const game = await Game.findById(req.params.id);
     console.log(
       "[downloadGame] Requête de téléchargement - ID:",
-      req.params.id
+      req.params.id,
     );
 
     if (!game) {
@@ -533,15 +514,14 @@ export const downloadGame = async (req, res) => {
 
     console.log(
       `[downloadGame] Taille fichier: ${(fileSize / (1024 * 1024)).toFixed(
-        2
-      )} MB`
+        2,
+      )} MB`,
     );
 
-    // Headers pour le téléchargement
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${game.zipFileName}"`
+      `attachment; filename="${game.zipFileName}"`,
     );
     res.setHeader("Content-Length", fileSize);
     res.setHeader("Accept-Ranges", "bytes");
@@ -549,7 +529,7 @@ export const downloadGame = async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
 
     const fileStream = fs.createReadStream(safePath, {
-      highWaterMark: 2 * 1024 * 1024, // 2 MB chunks
+      highWaterMark: 2 * 1024 * 1024,
     });
 
     fileStream.on("open", () => {
@@ -567,7 +547,6 @@ export const downloadGame = async (req, res) => {
       console.log("[downloadGame] Stream terminé avec succès");
     });
 
-    // Pipe le stream vers la réponse
     fileStream.pipe(res);
   } catch (error) {
     console.error("[downloadGame] Erreur:", error.message);
@@ -605,7 +584,6 @@ export const configureExecutable = async (req, res) => {
       return res.status(404).json({ message: "Jeu non trouvé" });
     }
 
-    // Mettre à jour la configuration executable
     game.executable = {
       fileName,
       relativePath,
@@ -635,12 +613,10 @@ export const configureExecutable = async (req, res) => {
   }
 };
 
-// Route pour lister les fichiers dans un jeu extrait
 export const listGameFiles = async (req, res) => {
   try {
     const { gameId } = req.params;
 
-    // Trouver le jeu installé pour cet utilisateur
     const installedGame = await InstalledGame.findOne({
       userId: req.user.id,
       serverGameId: gameId,
@@ -656,10 +632,8 @@ export const listGameFiles = async (req, res) => {
       return res.status(404).json({ message: "Fichiers du jeu non trouvés" });
     }
 
-    // Lister récursivement tous les fichiers
     const files = listFilesRecursive(gamePath, gamePath);
 
-    // Filtrer les executables potentiels
     const executables = files.filter(
       (file) =>
         file.extension === ".exe" ||
@@ -667,7 +641,7 @@ export const listGameFiles = async (req, res) => {
         file.extension === ".cmd" ||
         file.name.toLowerCase().includes("start") ||
         file.name.toLowerCase().includes("launch") ||
-        file.name.toLowerCase().includes("game")
+        file.name.toLowerCase().includes("game"),
     );
 
     res.status(200).json({
@@ -681,7 +655,6 @@ export const listGameFiles = async (req, res) => {
   }
 };
 
-// Fonction utilitaire pour lister les fichiers récursivement
 function listFilesRecursive(dir, baseDir) {
   const files = [];
 
