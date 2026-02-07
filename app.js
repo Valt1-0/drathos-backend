@@ -1,6 +1,9 @@
 import "dotenv/config.js";
 import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import { connect } from "./src/db/mongoConnect.js";
+import { setIO } from "./src/socket.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -34,6 +37,24 @@ import { cleanupStuckSessions } from "./src/controllers/installedGameController.
 const API_PORT = process.env.API_PORT || 5001;
 
 const app = express();
+const httpServer = createServer(app);
+
+// Socket.IO setup
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+// Store io instance for use in controllers
+setIO(io);
+
+// Socket.IO connection handling
+io.on("connection", (socket) => {
+  console.log(`🔌 Client connecté: ${socket.id}`);
+  socket.on("disconnect", () => console.log(`🔌 Client déconnecté: ${socket.id}`));
+});
 
 const startServer = async () => {
   try {
@@ -93,8 +114,9 @@ const startServer = async () => {
     app.use(errorHandler); // Gestion d'erreurs centralisée
 
     // Démarrage serveur
-    app.listen(API_PORT, () => {
+    httpServer.listen(API_PORT, () => {
       console.log(`🚀 Serveur Drathos démarré sur le port ${API_PORT}`);
+      console.log(`🔌 Socket.IO activé`);
       console.log(`🔒 Sécurité activée : Helmet, CORS, Rate Limiting`);
       console.log(`📁 Logs disponibles dans ./logs/`);
     });

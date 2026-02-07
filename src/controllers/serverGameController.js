@@ -18,6 +18,8 @@ import {
   cleanFileName,
 } from "../utils/pathValidator.js";
 
+import { emitGameAdded } from "../socket.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -205,6 +207,12 @@ export const addGame = (req, res) => {
       });
       await newGame.save();
       console.log("[addGame] ✅ Jeu sauvegardé dans MongoDB");
+
+      // Broadcast notification to all connected clients
+      emitGameAdded(
+        { id: newGame._id, name: newGame.name, coverUrl: newGame.coverUrl },
+        { id: req.user.id, username: req.user.username }
+      );
 
       res.status(201).json({
         error: false,
