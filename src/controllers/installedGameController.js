@@ -5,7 +5,7 @@ import InstalledGame from "../models/installedGameModel.js";
 // Ajouter un jeu installé
 export const addInstalledGame = async (req, res) => {
   try {
-    const { userId, serverGameId, path, version } = req.body;
+    const { userId, serverGameId, path, version, installSize } = req.body;
 
     if (!userId || !serverGameId || !path) {
       return res.status(400).json({ message: "Champs requis manquants." });
@@ -37,7 +37,7 @@ export const addInstalledGame = async (req, res) => {
         achievements: [],
         customStats: {},
       },
-      installSize: 0,
+      installSize: installSize || 0,
     });
 
     await installedGame.save();
@@ -129,25 +129,18 @@ export const stopGame = async (req, res) => {
     const { gameId } = req.params;
     const userId = req.user.id;
 
-    console.log(
-      `[Backend] 🛑 Arrêt jeu demandé - gameId: ${gameId}, userId: ${userId}`
-    );
-
     const installedGame = await InstalledGame.findOne({
       userId,
       serverGameId: gameId,
     });
 
     if (!installedGame || !installedGame.stats.currentSession.isPlaying) {
-      console.log(`[Backend] ⚠️ Aucune session active pour ${gameId}`);
       return res.status(404).json({ message: "Aucune session active" });
     }
 
     // Calculer la durée de la session
     const sessionStart = installedGame.stats.currentSession.startTime;
     const sessionDuration = Math.floor((Date.now() - sessionStart) / 1000);
-
-    console.log(`[Backend] ⏱️ Durée session: ${sessionDuration}s`);
 
     // Mettre à jour les statistiques
     installedGame.stats.totalPlayTime += sessionDuration;
@@ -157,15 +150,13 @@ export const stopGame = async (req, res) => {
 
     await installedGame.save();
 
-    console.log(`[Backend] ✅ Stats sauvegardées pour ${gameId}`);
-
     res.status(200).json({
       message: "Session terminée",
       sessionDuration: formatPlayTime(sessionDuration),
       totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
     });
   } catch (err) {
-    console.error("[Backend] ❌ Error stopping game:", err);
+    console.error("[Backend] Error stopping game:", err.message);
     res.status(500).json({ message: "Erreur lors de l'arrêt" });
   }
 };
@@ -274,7 +265,7 @@ export const syncGameStats = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[Backend] ❌ Error syncing stats:", err);
+    console.error("[Backend] Error syncing stats:", err.message);
     res.status(500).json({ message: "Erreur lors de la synchronisation" });
   }
 };
@@ -290,8 +281,6 @@ export const removeInstalledGame = async (req, res) => {
       return res.status(400).json({ message: "gameId requis" });
     }
 
-    console.log(`[Backend] 🗑️ Suppression jeu: ${gameId} pour user: ${userId}`);
-
     // Trouver et supprimer le jeu installé
     const result = await InstalledGame.findOneAndDelete({
       userId,
@@ -304,8 +293,6 @@ export const removeInstalledGame = async (req, res) => {
       });
     }
 
-    console.log(`[Backend] ✅ Jeu supprimé avec succès: ${result._id}`);
-
     res.status(200).json({
       message: "Jeu désinstallé avec succès",
       deletedGame: {
@@ -315,7 +302,7 @@ export const removeInstalledGame = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[Backend] ❌ Erreur lors de la suppression du jeu:", error);
+    console.error("[Backend] Erreur suppression jeu:", error.message);
     res.status(500).json({
       message: "Erreur serveur lors de la désinstallation",
       error: error.message,
@@ -342,7 +329,7 @@ function formatPlayTime(seconds) {
  */
 export const cleanupStuckSessions = async () => {
   try {
-    console.log("[Cleanup] 🧹 Vérification des sessions bloquées...");
+    console.log("[Cleanup] Vérification des sessions bloquées...");
 
     const result = await InstalledGame.updateMany(
       { "stats.currentSession.isPlaying": true },
@@ -355,11 +342,9 @@ export const cleanupStuckSessions = async () => {
     );
 
     if (result.modifiedCount > 0) {
-      console.log(
-        `[Cleanup] ✅ ${result.modifiedCount} session(s) bloquée(s) réinitialisée(s)`
-      );
+      console.log(`[Cleanup] ${result.modifiedCount} session(s) bloquée(s) réinitialisée(s)`);
     } else {
-      console.log("[Cleanup] ✅ Aucune session bloquée détectée");
+      console.log("[Cleanup] Aucune session bloquée");
     }
 
     return {
@@ -367,7 +352,7 @@ export const cleanupStuckSessions = async () => {
       cleanedSessions: result.modifiedCount,
     };
   } catch (error) {
-    console.error("[Cleanup] ❌ Erreur lors du nettoyage des sessions:", error);
+    console.error("[Cleanup] Erreur nettoyage sessions:", error.message);
     return {
       success: false,
       error: error.message,
