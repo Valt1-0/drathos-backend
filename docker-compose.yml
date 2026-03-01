@@ -4,21 +4,24 @@ services:
     image: registry.home.arpa/drathos-backend:latest
     build:
       context: .
+    restart: unless-stopped
     environment:
       - API_PORT=5001
       - MONGODB_URI=mongodb://mongodb:27017/drathos
       - JWT_TOKEN=hide_this
       - CORS_STRICT_MODE=false
       - CORS_ALLOWED_ORIGINS=*
-      - GAME_FILES_DIR=serverGames
+      - GAME_FILES_DIR=/usr/src/app/serverData/serverGames
+      - MOD_FILES_DIR=/usr/src/app/serverData/serverMods
       - TWITCH_CLIENT_ID=YOUR_TWITCH_CLIENT_ID
       - TWITCH_CLIENT_SECRET=YOUR_TWITCH_CLIENT_SECRET
     ports:
       - "8080:5001"
     volumes:
-      - server-games:/app/serverGames
+      - server-data:/usr/src/app/serverData
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - traefik_network
       - drathos_network
@@ -43,14 +46,21 @@ services:
   mongodb:
     container_name: drathos-db
     image: mongo:4
+    restart: unless-stopped
     volumes:
       - mongo-data:/data/db
     networks:
       - drathos_network
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   mongo-data:
-  server-games:
+  server-data:
 
 networks:
   traefik_network:
