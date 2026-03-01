@@ -17,11 +17,12 @@ import {
   validateRoleUpdate,
 } from "../middlewares/validationMiddleware.js";
 import { authMiddleware, requireAdmin } from "../middlewares/authMiddleware.js";
+import { authLimiter } from "../middlewares/rateLimitMiddleware.js";
 
 const router = express.Router();
 
-router.post("/register", validateRegister, register);
-router.post("/login", validateLogin, login);
+router.post("/register", authLimiter, validateRegister, register);
+router.post("/login", authLimiter, validateLogin, login);
 
 router.get("/profiles", authMiddleware, getAllUsers);
 router.get("/profiles/:userId", authMiddleware, validateUserId, getUserProfile);

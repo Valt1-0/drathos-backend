@@ -1,3 +1,4 @@
+import logger from "../utils/logger.js";
 import multer from "multer";
 import path, { dirname } from "path";
 import fs from "fs";
@@ -58,7 +59,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 200 * 1024 * 1024 * 1024,
+    fileSize: 50 * 1024 * 1024 * 1024, // 50 GB max
   },
 }).single("zipFile");
 
@@ -66,7 +67,11 @@ export const addGame = (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (unlinkError) { /* ignore */ }
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          logger.warn("[addGame] Failed to cleanup temp file:", unlinkError.message);
+        }
       }
       return res.status(400).json({ error: true, message: err.message });
     }
@@ -137,22 +142,37 @@ export const addGame = (req, res) => {
         isPublic: isPublic !== undefined ? isPublic : true,
         multiplayer: multiplayer
           ? (() => {
-              const parsed =
-                typeof multiplayer === "string"
-                  ? JSON.parse(multiplayer)
-                  : multiplayer;
-              return {
-                enabled: parsed.enabled === "true" || parsed.enabled === true,
-                type: parsed.type || null,
-                maxPlayers: parsed.maxPlayers
-                  ? parseInt(parsed.maxPlayers)
-                  : null,
-                modes: Array.isArray(parsed.modes)
-                  ? parsed.modes
-                  : parsed.modes
-                    ? JSON.parse(parsed.modes)
-                    : [],
-              };
+              try {
+                const parsed =
+                  typeof multiplayer === "string"
+                    ? JSON.parse(multiplayer)
+                    : multiplayer;
+                let modes = [];
+                if (Array.isArray(parsed.modes)) {
+                  modes = parsed.modes;
+                } else if (parsed.modes) {
+                  try {
+                    modes = JSON.parse(parsed.modes);
+                  } catch {
+                    modes = [];
+                  }
+                }
+                return {
+                  enabled: parsed.enabled === "true" || parsed.enabled === true,
+                  type: parsed.type || null,
+                  maxPlayers: parsed.maxPlayers
+                    ? parseInt(parsed.maxPlayers)
+                    : null,
+                  modes,
+                };
+              } catch {
+                return {
+                  enabled: false,
+                  type: null,
+                  maxPlayers: null,
+                  modes: [],
+                };
+              }
             })()
           : {
               enabled: false,
@@ -168,7 +188,7 @@ export const addGame = (req, res) => {
       // Broadcast notification to all connected clients
       emitGameAdded(
         { id: newGame._id, name: newGame.name, coverUrl: newGame.coverUrl },
-        { id: req.user.id, username: req.user.username }
+        { id: req.user.id, username: req.user.username },
       );
 
       res.status(201).json({
@@ -177,10 +197,14 @@ export const addGame = (req, res) => {
         game: newGame,
       });
     } catch (error) {
-      console.error("[addGame] Error:", error.message);
+      logger.error("[addGame] Error:", error.message);
 
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (unlinkError) { /* ignore */ }
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          /* ignore */
+        }
       }
 
       if (
@@ -205,13 +229,25 @@ export const addGame = (req, res) => {
 
 export const getAllGames = async (req, res) => {
   try {
+    const { page, limit } = req.query;
+
+    // Pagination optionnelle — sans params, retourne tout (compatibilité frontend)
+    if (page && limit) {
+      const pageNum = Math.max(1, parseInt(page));
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+      const skip = (pageNum - 1) * limitNum;
+      const [games, total] = await Promise.all([
+        Game.find().sort({ addedDate: -1 }).skip(skip).limit(limitNum),
+        Game.countDocuments(),
+      ]);
+      return res.status(200).json({ games, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
+    }
+
     const games = await Game.find().sort({ addedDate: -1 });
     res.status(200).json(games);
   } catch (error) {
-    console.error("[getAllGames] Error:", error.message);
-    res
-      .status(500)
-      .json({ message: "Error fetching games.", error: error.message });
+    logger.error("[getAllGames] Error:", error.message);
+    res.status(500).json({ error: true, message: "Error fetching games." });
   }
 };
 
@@ -223,10 +259,8 @@ export const getGameById = async (req, res) => {
     }
     res.status(200).json(game);
   } catch (error) {
-    console.error("[getGameById] Error:", error.message);
-    res
-      .status(500)
-      .json({ message: "Error fetching game.", error: error.message });
+    logger.error("[getGameById] Error:", error.message);
+    res.status(500).json({ error: true, message: "Error fetching game." });
   }
 };
 
@@ -234,7 +268,11 @@ export const updateGame = (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (unlinkError) { /* ignore */ }
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          /* ignore */
+        }
       }
       return res.status(400).json({ message: err.message });
     }
@@ -265,7 +303,9 @@ export const updateGame = (req, res) => {
         try {
           const oldPath = validateFileAccess(game.zipFilePath, GAME_FILES_DIR);
           if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-        } catch (error) { /* ignore */ }
+        } catch (error) {
+          /* ignore */
+        }
 
         fs.renameSync(req.file.path, newPath);
 
@@ -276,15 +316,17 @@ export const updateGame = (req, res) => {
       await game.save();
       res.status(200).json({ message: "Game updated successfully.", game });
     } catch (error) {
-      console.error("[updateGame] Error:", error.message);
+      logger.error("[updateGame] Error:", error.message);
 
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (unlinkError) { /* ignore */ }
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          /* ignore */
+        }
       }
 
-      res
-        .status(500)
-        .json({ message: "Error updating game.", error: error.message });
+      res.status(500).json({ error: true, message: "Error updating game." });
     }
   });
 };
@@ -357,7 +399,7 @@ export const deleteGame = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[deleteGame] Error:", error.message);
+    logger.error("[deleteGame] Error:", error.message);
 
     let statusCode = 500;
     let errorCode = "DELETE_FAILED";
@@ -444,7 +486,7 @@ export const downloadGame = async (req, res) => {
 
     fileStream.pipe(res);
   } catch (error) {
-    console.error("[downloadGame] Error:", error.message);
+    logger.error("[downloadGame] Error:", error.message);
 
     if (
       error.message.includes("introuvable") ||
@@ -474,7 +516,7 @@ export const configureExecutable = async (req, res) => {
       environmentVariables,
     } = req.body;
 
-    const game = await ServerGame.findById(gameId);
+    const game = await Game.findById(gameId);
     if (!game) {
       return res.status(404).json({ message: "Jeu non trouvé" });
     }
@@ -503,8 +545,8 @@ export const configureExecutable = async (req, res) => {
       executable: game.executable,
     });
   } catch (error) {
-    console.error("[configureExecutable] Error:", error);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    logger.error("[configureExecutable] Error:", error);
+    res.status(500).json({ error: true, message: "Erreur serveur" });
   }
 };
 
@@ -527,7 +569,7 @@ export const listGameFiles = async (req, res) => {
       return res.status(404).json({ message: "Fichiers du jeu non trouvés" });
     }
 
-    const files = listFilesRecursive(gamePath, gamePath);
+    const files = await listFilesRecursive(gamePath, gamePath);
 
     const executables = files.filter(
       (file) =>
@@ -545,37 +587,38 @@ export const listGameFiles = async (req, res) => {
       gamePath: gamePath,
     });
   } catch (error) {
-    console.error("[listGameFiles] Error:", error);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    logger.error("[listGameFiles] Error:", error);
+    res.status(500).json({ error: true, message: "Erreur serveur" });
   }
 };
 
-function listFilesRecursive(dir, baseDir) {
+async function listFilesRecursive(dir, baseDir) {
   const files = [];
 
-  function scanDirectory(currentDir) {
-    const items = fs.readdirSync(currentDir);
+  async function scanDirectory(currentDir) {
+    const items = await fs.promises.readdir(currentDir);
+    await Promise.all(
+      items.map(async (item) => {
+        const fullPath = path.join(currentDir, item);
+        const stats = await fs.promises.stat(fullPath);
+        const relativePath = path.relative(baseDir, fullPath);
 
-    items.forEach((item) => {
-      const fullPath = path.join(currentDir, item);
-      const stats = fs.statSync(fullPath);
-      const relativePath = path.relative(baseDir, fullPath);
-
-      if (stats.isDirectory()) {
-        scanDirectory(fullPath);
-      } else {
-        files.push({
-          name: item,
-          relativePath: relativePath,
-          fullPath: fullPath,
-          extension: path.extname(item).toLowerCase(),
-          size: stats.size,
-          isExecutable: path.extname(item).toLowerCase() === ".exe",
-        });
-      }
-    });
+        if (stats.isDirectory()) {
+          await scanDirectory(fullPath);
+        } else {
+          files.push({
+            name: item,
+            relativePath,
+            fullPath,
+            extension: path.extname(item).toLowerCase(),
+            size: stats.size,
+            isExecutable: path.extname(item).toLowerCase() === ".exe",
+          });
+        }
+      })
+    );
   }
 
-  scanDirectory(dir);
+  await scanDirectory(dir);
   return files;
 }

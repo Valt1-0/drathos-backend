@@ -1,3 +1,5 @@
+import logger from "./utils/logger.js";
+
 let io = null;
 
 export const setIO = (ioInstance) => {
@@ -9,6 +11,6 @@ export const getIO = () => io;
 export const emitGameAdded = (game, user) => {
   if (io) {
     io.emit("game:added", { game, user });
-    console.log("[Socket] 📢 game:added broadcast envoyé");
+    logger.info("[Socket] game:added broadcast envoyé");
   }
 };

@@ -1,3 +1,4 @@
+import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
 
 export const authMiddleware = async (req, res, next) => {
@@ -13,7 +14,7 @@ export const authMiddleware = async (req, res, next) => {
     req.user = decoded.user; // Correct
     next();
   } catch (error) {
-    console.error("[authMiddleware] Error:", error.message);
+    logger.error("[authMiddleware] Error:", error.message);
 
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({ message: "Token expired." });
@@ -35,16 +36,16 @@ export const requireAdmin = (req, res, next) => {
     }
 
     if (req.user.role !== "admin") {
-      console.warn(`[requireAdmin] User ${req.user.username} attempted admin action without permission`);
+      logger.warn(`[requireAdmin] User ${req.user.username} attempted admin action without permission`);
       return res.status(403).json({
         message: "Forbidden. Admin access required."
       });
     }
 
-    console.log(`[requireAdmin] Admin access granted for ${req.user.username}`);
+    logger.info(`[requireAdmin] Admin access granted for ${req.user.username}`);
     next();
   } catch (error) {
-    console.error("[requireAdmin] Error:", error.message);
+    logger.error("[requireAdmin] Error:", error.message);
     res.status(500).json({ message: "Server error during authorization check." });
   }
 };

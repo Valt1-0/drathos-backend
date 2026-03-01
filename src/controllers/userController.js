@@ -1,3 +1,4 @@
+import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import InstalledGame from "../models/installedGameModel.js";
@@ -63,7 +64,7 @@ const deleteProfileFile = async (profilePicture) => {
     await fs.unlink(filePath);
   } catch (err) {
     if (err.code !== "ENOENT")
-      console.error("Error deleting profile file:", err);
+      logger.error("Error deleting profile file:", err);
   }
 };
 
@@ -139,7 +140,7 @@ export const register = async (req, res) => {
 
   try {
     if (await User.exists({ username })) {
-      return res.status(400).json({ msg: "User already exists" });
+      return res.status(400).json({ error: true, message: "User already exists" });
     }
 
     const isFirstUser = (await User.countDocuments()) === 0;
@@ -152,7 +153,7 @@ export const register = async (req, res) => {
     const token = await signToken(user);
     res.json({ token, message: "User registered successfully" });
   } catch (err) {
-    console.error("[userController] register error:", err.message);
+    logger.error("[userController] register error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -163,13 +164,13 @@ export const login = async (req, res) => {
   try {
     const user = await User.findOne({ username });
     if (!user || !(await user.matchPassword(password))) {
-      return res.status(400).json({ msg: "Invalid credentials" });
+      return res.status(400).json({ error: true, message: "Invalid credentials" });
     }
 
     const token = await signToken(user);
     res.json({ token });
   } catch (err) {
-    console.error("[userController] login error:", err.message);
+    logger.error("[userController] login error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -221,7 +222,7 @@ export const getAllUsers = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[userController] getAllUsers error:", error);
+    logger.error("[userController] getAllUsers error:", error);
     res.status(500).json({ message: "Server error while fetching users" });
   }
 };
@@ -268,7 +269,7 @@ export const getUserProfile = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("[userController] getUserProfile error:", error);
+    logger.error("[userController] getUserProfile error:", error);
     res.status(500).json({ message: "Server error while fetching profile" });
   }
 };
@@ -296,7 +297,7 @@ export const updateProfileVisibility = async (req, res) => {
       isProfilePublic: user.isProfilePublic,
     });
   } catch (error) {
-    console.error("[userController] updateProfileVisibility error:", error);
+    logger.error("[userController] updateProfileVisibility error:", error);
     res.status(500).json({ message: "Server error while updating visibility" });
   }
 };
@@ -330,7 +331,7 @@ export const uploadProfilePicture = async (req, res) => {
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
-    console.error("[userController] uploadProfilePicture error:", error);
+    logger.error("[userController] uploadProfilePicture error:", error);
     res
       .status(500)
       .json({ message: "Server error while uploading profile picture" });
@@ -357,7 +358,7 @@ export const deleteProfilePicture = async (req, res) => {
       profilePicture: DEFAULT_PROFILE_PICTURE,
     });
   } catch (error) {
-    console.error("[userController] deleteProfilePicture error:", error);
+    logger.error("[userController] deleteProfilePicture error:", error);
     res
       .status(500)
       .json({ message: "Server error while deleting profile picture" });
@@ -405,7 +406,7 @@ export const updateUserRole = async (req, res) => {
       user: { _id: user._id, username: user.username, role }
     });
   } catch (error) {
-    console.error("[userController] updateUserRole error:", error);
+    logger.error("[userController] updateUserRole error:", error);
     res.status(500).json({ message: "Server error while updating user role" });
   }
 };

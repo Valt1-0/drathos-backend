@@ -1,12 +1,16 @@
 import "dotenv/config.js";
+import logger from "./src/utils/logger.js";
 import express from "express";
+import compression from "compression";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { connect } from "./src/db/mongoConnect.js";
 import { setIO } from "./src/socket.js";
+import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { apiLimiter } from "./src/middlewares/rateLimitMiddleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,7 +46,9 @@ const httpServer = createServer(app);
 // Socket.IO setup
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+      : "*",
     methods: ["GET", "POST"],
   },
 });
@@ -52,8 +58,8 @@ setIO(io);
 
 // Socket.IO connection handling
 io.on("connection", (socket) => {
-  console.log(`🔌 Client connecté: ${socket.id}`);
-  socket.on("disconnect", () => console.log(`🔌 Client déconnecté: ${socket.id}`));
+  logger.info(`Client connecté: ${socket.id}`);
+  socket.on("disconnect", () => logger.info(`Client déconnecté: ${socket.id}`));
 });
 
 const startServer = async () => {
@@ -65,8 +71,9 @@ const startServer = async () => {
     await cleanupStuckSessions();
 
     // Créer le dossier logs s'il n'existe pas
-    if (!fs.existsSync("logs")) {
-      fs.mkdirSync("logs");
+    const logsDir = path.join(__dirname, "logs");
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
     }
 
     // 📁 Servir les fichiers statiques (serverData) AVANT Helmet pour éviter les restrictions CORS
@@ -77,16 +84,25 @@ const startServer = async () => {
     }, express.static(path.join(__dirname, "serverData")));
 
     // 🔒 MIDDLEWARES DE SÉCURITÉ (ORDRE IMPORTANT)
-    app.use(helmetConfig); // Headers de sécurité
-    app.use(corsConfig); // CORS sécurisé
-    app.use(express.json({ limit: "10mb" })); // Limite la taille des JSON
+    app.use(helmetConfig);
+    app.use(corsConfig);
+    app.use(compression());
+    app.use(express.json({ limit: "10mb" }));
     app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-    // Middleware de logging des requêtes
+    // Request ID — traçabilité dans les logs
     app.use((req, res, next) => {
-      console.log(
-        `${new Date().toISOString()} - ${req.method} ${req.url} - IP: ${req.ip}`
-      );
+      req.id = randomUUID();
+      res.setHeader("X-Request-Id", req.id);
+      next();
+    });
+
+    // Rate limiting global
+    app.use("/api/", apiLimiter);
+
+    // Logging des requêtes
+    app.use((req, res, next) => {
+      logger.info(`[${req.id}] ${req.method} ${req.url} - IP: ${req.ip}`);
       next();
     });
 
@@ -103,7 +119,7 @@ const startServer = async () => {
     app.get("/", (req, res) => {
       res.json({
         message: "Drathos API Server",
-        version: "1.0.0",
+        version: "0.7.0",
         status: "running",
         timestamp: new Date().toISOString(),
       });
@@ -115,19 +131,33 @@ const startServer = async () => {
 
     // Démarrage serveur
     httpServer.listen(API_PORT, () => {
-      console.log(`🚀 Serveur Drathos démarré sur le port ${API_PORT}`);
-      console.log(`🔌 Socket.IO activé`);
-      console.log(`🔒 Sécurité activée : Helmet, CORS, Rate Limiting`);
-      console.log(`📁 Logs disponibles dans ./logs/`);
+      logger.info(`Serveur Drathos démarré sur le port ${API_PORT}`);
+      logger.info(`Socket.IO activé`);
+      logger.info(`Sécurité activée : Helmet, CORS, Rate Limiting`);
+      logger.info(`Logs disponibles dans ./logs/`);
     });
 
     return app;
   } catch (error) {
-    console.error("❌ Erreur au démarrage du serveur:", error);
+    logger.error("Erreur au démarrage du serveur:", error);
     process.exit(1);
   }
 };
 
 startServer();
+
+const shutdown = async (signal) => {
+  logger.info(`\n${signal} reçu — arrêt propre du serveur...`);
+  // Force kill si pas terminé en 10s
+  setTimeout(() => process.exit(1), 10000).unref();
+  await new Promise((resolve) => httpServer.close(resolve));
+  const { default: mongoose } = await import("mongoose");
+  await mongoose.connection.close();
+  logger.info("Connexion MongoDB fermée.");
+  process.exit(0);
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 export default app;

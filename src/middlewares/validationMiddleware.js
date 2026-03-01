@@ -27,9 +27,9 @@ export const validateRegister = [
   body("password")
     .isLength({ min: 8, max: 128 })
     .withMessage("Le mot de passe doit contenir entre 8 et 128 caractères")
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
     .withMessage(
-      "Le mot de passe doit contenir au moins une minuscule, une majuscule et un chiffre"
+      "Le mot de passe doit contenir au moins une minuscule, une majuscule, un chiffre et un caractère spécial (@$!%*?&)"
     ),
 
   handleValidationErrors,

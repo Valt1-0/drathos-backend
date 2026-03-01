@@ -1,5 +1,6 @@
 // drathos-backend/src/controllers/collectionController.js
 
+import logger from "../utils/logger.js";
 import Collection from "../models/collectionModel.js";
 
 
@@ -33,7 +34,7 @@ export const createCollection = async (req, res) => {
 
     res.status(201).json({ message: "Collection créée avec succès", collection });
   } catch (err) {
-    console.error("Erreur lors de la création de la collection:", err);
+    logger.error("Erreur lors de la création de la collection:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -58,7 +59,7 @@ export const getUserCollections = async (req, res) => {
 
     res.status(200).json(collectionsWithCount);
   } catch (err) {
-    console.error("Erreur lors de la récupération des collections:", err);
+    logger.error("Erreur lors de la récupération des collections:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -81,7 +82,7 @@ export const getCollectionById = async (req, res) => {
 
     res.status(200).json(collection);
   } catch (err) {
-    console.error("Erreur lors de la récupération de la collection:", err);
+    logger.error("Erreur lors de la récupération de la collection:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -117,7 +118,7 @@ export const updateCollection = async (req, res) => {
 
     res.status(200).json({ message: "Collection mise à jour avec succès", collection });
   } catch (err) {
-    console.error("Erreur lors de la mise à jour de la collection:", err);
+    logger.error("Erreur lors de la mise à jour de la collection:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -136,7 +137,7 @@ export const deleteCollection = async (req, res) => {
 
     res.status(200).json({ message: "Collection supprimée avec succès" });
   } catch (err) {
-    console.error("Erreur lors de la suppression de la collection:", err);
+    logger.error("Erreur lors de la suppression de la collection:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -176,7 +177,7 @@ export const addGamesToCollection = async (req, res) => {
 
     res.status(200).json({ message: "Jeux ajoutés avec succès", collection });
   } catch (err) {
-    console.error("Erreur lors de l'ajout des jeux:", err);
+    logger.error("Erreur lors de l'ajout des jeux:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -208,7 +209,7 @@ export const removeGamesFromCollection = async (req, res) => {
 
     res.status(200).json({ message: "Jeux retirés avec succès", collection });
   } catch (err) {
-    console.error("Erreur lors du retrait des jeux:", err);
+    logger.error("Erreur lors du retrait des jeux:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

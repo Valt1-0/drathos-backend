@@ -1,3 +1,4 @@
+import logger from "../utils/logger.js";
 import multer from "multer";
 import path, { dirname } from "path";
 import fs from "fs";
@@ -16,7 +17,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const MOD_FILES_DIR =
-  process.env.MOD_FILES_DIR || path.join(__dirname, "../../serverData/serverMods/");
+  process.env.MOD_FILES_DIR ||
+  path.join(__dirname, "../../serverData/serverMods/");
 
 if (!fs.existsSync(MOD_FILES_DIR)) {
   fs.mkdirSync(MOD_FILES_DIR, { recursive: true });
@@ -52,7 +54,10 @@ const fileFilter = (req, file, cb) => {
 
   // Check other extensions
   if (!allowedExtensions.includes(ext)) {
-    return cb(new Error("Only .zip, .7z, .rar, .tar, .tar.gz, .tgz files are allowed."), false);
+    return cb(
+      new Error("Only .zip, .7z, .rar, .tar, .tar.gz, .tgz files are allowed."),
+      false,
+    );
   }
   cb(null, true);
 };
@@ -61,7 +66,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 20 * 1024 * 1024 * 1024, // 20 GB max
+    fileSize: 2 * 1024 * 1024 * 1024, // 2 GB max
   },
 }).single("modFile");
 
@@ -69,7 +74,7 @@ const upload = multer({
 export const uploadMod = (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
-      console.error("[uploadMod] Error:", err.message);
+      logger.error("[uploadMod] Error:", err.message);
       if (req.file?.path && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
@@ -103,22 +108,36 @@ export const uploadMod = (req, res) => {
       validateFileName(filename);
       const safePath = sanitizePath(MOD_FILES_DIR, filename);
 
-      if (fs.existsSync(safePath)) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({
-          error: true,
-          message: "Un fichier avec ce nom existe déjà",
-        });
+      // Atomic check+create via exclusive open (évite la race condition TOCTOU)
+      try {
+        const fd = fs.openSync(safePath, "wx");
+        fs.closeSync(fd);
+      } catch (e) {
+        if (e.code === "EEXIST") {
+          fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            error: true,
+            message: "Un fichier avec ce nom existe déjà",
+          });
+        }
+        throw e;
       }
 
       fs.renameSync(req.file.path, safePath);
 
-      const platforms = platform
-        ? JSON.parse(platform)
-        : ["win32", "linux", "darwin"];
-      const gameVersions = compatibleGameVersions
-        ? JSON.parse(compatibleGameVersions)
-        : [];
+      let platforms = ["win32", "linux", "darwin"];
+      let gameVersions = [];
+      try {
+        if (platform) platforms = JSON.parse(platform);
+      } catch {
+        /* keep default */
+      }
+      try {
+        if (compatibleGameVersions)
+          gameVersions = JSON.parse(compatibleGameVersions);
+      } catch {
+        /* keep default */
+      }
 
       const newMod = new Mod({
         gameId,
@@ -145,7 +164,7 @@ export const uploadMod = (req, res) => {
         mod: newMod,
       });
     } catch (error) {
-      console.error("[uploadMod] Error:", error);
+      logger.error("[uploadMod] Error:", error);
 
       if (req.file?.path && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
@@ -180,7 +199,7 @@ export const getModsByGame = async (req, res) => {
       mods,
     });
   } catch (error) {
-    console.error("[getModsByGame] Error:", error.message);
+    logger.error("[getModsByGame] Error:", error.message);
     return res.status(500).json({
       error: true,
       message: "Error fetching mods.",
@@ -200,7 +219,7 @@ export const getModById = async (req, res) => {
 
     return res.status(200).json(mod);
   } catch (error) {
-    console.error("[getModById] Error:", error.message);
+    logger.error("[getModById] Error:", error.message);
     return res.status(500).json({
       error: true,
       message: "Error fetching mod.",
@@ -234,7 +253,7 @@ export const downloadMod = async (req, res) => {
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${mod.zipFileName}"`
+      `attachment; filename="${mod.zipFileName}"`,
     );
     res.setHeader("Content-Length", fileSize);
     res.setHeader("Accept-Ranges", "bytes");
@@ -246,7 +265,7 @@ export const downloadMod = async (req, res) => {
     });
 
     fileStream.on("error", (err) => {
-      console.error("[downloadMod] Stream error:", err);
+      logger.error("[downloadMod] Stream error:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: true, message: "Error streaming file." });
       }
@@ -254,7 +273,7 @@ export const downloadMod = async (req, res) => {
 
     fileStream.pipe(res);
   } catch (error) {
-    console.error("[downloadMod] Error:", error.message);
+    logger.error("[downloadMod] Error:", error.message);
 
     if (!res.headersSent) {
       res.status(500).json({
@@ -279,7 +298,7 @@ export const getInstalledMods = async (req, res) => {
       installedMods,
     });
   } catch (error) {
-    console.error("[getInstalledMods] Error:", error.message);
+    logger.error("[getInstalledMods] Error:", error.message);
     res.status(500).json({
       error: true,
       message: "Error fetching installed mods.",
@@ -310,7 +329,10 @@ export const markAsInstalled = async (req, res) => {
     }
 
     // Vérifier si déjà installé
-    const existing = await InstalledMod.findOne({ userId: req.user.id, modId }).lean();
+    const existing = await InstalledMod.findOne({
+      userId: req.user.id,
+      modId,
+    }).lean();
     if (existing) {
       return res.status(400).json({
         error: true,
@@ -333,7 +355,7 @@ export const markAsInstalled = async (req, res) => {
       installedMod,
     });
   } catch (error) {
-    console.error("[markAsInstalled] Error:", error.message);
+    logger.error("[markAsInstalled] Error:", error.message);
     res.status(500).json({
       error: true,
       message: "Error marking mod as installed.",
@@ -347,7 +369,7 @@ export const uninstallMod = async (req, res) => {
   try {
     const result = await InstalledMod.deleteOne({
       userId: req.user.id,
-      modId: req.params.modId
+      modId: req.params.modId,
     });
 
     if (result.deletedCount === 0) {
@@ -362,7 +384,7 @@ export const uninstallMod = async (req, res) => {
       message: "Mod uninstalled successfully.",
     });
   } catch (error) {
-    console.error("[uninstallMod] Error:", error.message);
+    logger.error("[uninstallMod] Error:", error.message);
     res.status(500).json({
       error: true,
       message: "Error uninstalling mod.",
@@ -377,12 +399,17 @@ export const deleteMod = async (req, res) => {
     const modId = req.params.modId;
     const adminId = req.user.id;
 
-    console.log("[deleteMod] Début suppression - ID:", modId, "Admin:", adminId);
+    logger.info(
+      "[deleteMod] Début suppression - ID:",
+      modId,
+      "Admin:",
+      adminId,
+    );
 
     // Vérifier l'existence du mod
     const mod = await Mod.findById(modId);
     if (!mod) {
-      console.error("[deleteMod] Mod non trouvé - ID:", modId);
+      logger.error("[deleteMod] Mod non trouvé - ID:", modId);
       return res.status(404).json({
         error: true,
         message: "Mod not found.",
@@ -390,7 +417,7 @@ export const deleteMod = async (req, res) => {
       });
     }
 
-    console.log("[deleteMod] Mod trouvé:", mod.name);
+    logger.info("[deleteMod] Mod trouvé:", mod.name);
 
     // Vérifier les installations actives
     const activeInstallations = await InstalledMod.countDocuments({
@@ -398,7 +425,9 @@ export const deleteMod = async (req, res) => {
     });
 
     if (activeInstallations > 0) {
-      console.error(`[deleteMod] ${activeInstallations} installation(s) active(s)`);
+      logger.error(
+        `[deleteMod] ${activeInstallations} installation(s) active(s)`,
+      );
       return res.status(409).json({
         error: true,
         message: `Cannot delete mod with ${activeInstallations} active installation(s).`,
@@ -407,15 +436,17 @@ export const deleteMod = async (req, res) => {
       });
     }
 
-    console.log("[deleteMod] Aucune installation active");
+    logger.info("[deleteMod] Aucune installation active");
 
     // Supprimer les enregistrements InstalledMod
     const deletedInstalled = await InstalledMod.deleteMany({ modId });
-    console.log(`[deleteMod] ${deletedInstalled.deletedCount} enregistrements supprimés`);
+    logger.info(
+      `[deleteMod] ${deletedInstalled.deletedCount} enregistrements supprimés`,
+    );
 
     // Supprimer le mod de la base de données
     await Mod.findByIdAndDelete(modId);
-    console.log("[deleteMod] Mod supprimé de la BD");
+    logger.info("[deleteMod] Mod supprimé de la BD");
 
     // Supprimer le fichier physique
     let fileDeletedSuccessfully = false;
@@ -426,17 +457,20 @@ export const deleteMod = async (req, res) => {
       if (fs.existsSync(safePath)) {
         fs.unlinkSync(safePath);
         fileDeletedSuccessfully = true;
-        console.log("[deleteMod] Fichier supprimé:", safePath);
+        logger.info("[deleteMod] Fichier supprimé:", safePath);
       } else {
         fileErrorDetails = "FILE_NOT_FOUND";
-        console.warn("[deleteMod] Fichier introuvable:", safePath);
+        logger.warn("[deleteMod] Fichier introuvable:", safePath);
       }
     } catch (fileError) {
       fileErrorDetails = fileError.message;
-      console.error("[deleteMod] Erreur suppression fichier:", fileError.message);
+      logger.error(
+        "[deleteMod] Erreur suppression fichier:",
+        fileError.message,
+      );
     }
 
-    console.log("[deleteMod] Suppression complétée");
+    logger.info("[deleteMod] Suppression complétée");
 
     res.status(200).json({
       error: false,
@@ -457,12 +491,15 @@ export const deleteMod = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[deleteMod] Erreur:", error.message);
+    logger.error("[deleteMod] Erreur:", error.message);
 
     let statusCode = 500;
     let errorCode = "DELETE_FAILED";
 
-    if (error.message.includes("interdit") || error.message.includes("introuvable")) {
+    if (
+      error.message.includes("interdit") ||
+      error.message.includes("introuvable")
+    ) {
       statusCode = 403;
       errorCode = "PATH_VALIDATION_ERROR";
     } else if (error.name === "CastError") {

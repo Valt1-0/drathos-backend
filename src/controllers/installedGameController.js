@@ -1,5 +1,6 @@
 // drathos-backend/src/controllers/installedGameController.js
 
+import logger from "../utils/logger.js";
 import InstalledGame from "../models/installedGameModel.js";
 
 // Ajouter un jeu installé
@@ -46,7 +47,7 @@ export const addInstalledGame = async (req, res) => {
       .status(201)
       .json({ message: "Jeu installé ajouté avec succès", installedGame });
   } catch (err) {
-    console.error("Erreur lors de l'ajout d'un jeu installé:", err);
+    logger.error("Erreur lors de l'ajout d'un jeu installé:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -79,7 +80,7 @@ export const getInstalledGames = async (req, res) => {
 
     res.status(200).json(formattedGames);
   } catch (err) {
-    console.error("Error fetching installed games:", err);
+    logger.error("Error fetching installed games:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -118,7 +119,7 @@ export const launchGame = async (req, res) => {
       sessionId: installedGame._id,
     });
   } catch (err) {
-    console.error("Error launching game:", err);
+    logger.error("Error launching game:", err);
     res.status(500).json({ message: "Erreur lors du lancement" });
   }
 };
@@ -156,7 +157,7 @@ export const stopGame = async (req, res) => {
       totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
     });
   } catch (err) {
-    console.error("[Backend] Error stopping game:", err.message);
+    logger.error("[Backend] Error stopping game:", err.message);
     res.status(500).json({ message: "Erreur lors de l'arrêt" });
   }
 };
@@ -209,7 +210,7 @@ export const getGameStats = async (req, res) => {
 
     res.status(200).json(stats);
   } catch (err) {
-    console.error("Error fetching game stats:", err);
+    logger.error("Error fetching game stats:", err);
     res
       .status(500)
       .json({ message: "Erreur lors de la récupération des stats" });
@@ -265,7 +266,7 @@ export const syncGameStats = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[Backend] Error syncing stats:", err.message);
+    logger.error("[Backend] Error syncing stats:", err.message);
     res.status(500).json({ message: "Erreur lors de la synchronisation" });
   }
 };
@@ -302,7 +303,7 @@ export const removeInstalledGame = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[Backend] Erreur suppression jeu:", error.message);
+    logger.error("[Backend] Erreur suppression jeu:", error.message);
     res.status(500).json({
       message: "Erreur serveur lors de la désinstallation",
       error: error.message,
@@ -329,7 +330,7 @@ function formatPlayTime(seconds) {
  */
 export const cleanupStuckSessions = async () => {
   try {
-    console.log("[Cleanup] Vérification des sessions bloquées...");
+    logger.info("[Cleanup] Vérification des sessions bloquées...");
 
     const result = await InstalledGame.updateMany(
       { "stats.currentSession.isPlaying": true },
@@ -342,9 +343,9 @@ export const cleanupStuckSessions = async () => {
     );
 
     if (result.modifiedCount > 0) {
-      console.log(`[Cleanup] ${result.modifiedCount} session(s) bloquée(s) réinitialisée(s)`);
+      logger.info(`[Cleanup] ${result.modifiedCount} session(s) bloquée(s) réinitialisée(s)`);
     } else {
-      console.log("[Cleanup] Aucune session bloquée");
+      logger.info("[Cleanup] Aucune session bloquée");
     }
 
     return {
@@ -352,7 +353,7 @@ export const cleanupStuckSessions = async () => {
       cleanedSessions: result.modifiedCount,
     };
   } catch (error) {
-    console.error("[Cleanup] Erreur nettoyage sessions:", error.message);
+    logger.error("[Cleanup] Erreur nettoyage sessions:", error.message);
     return {
       success: false,
       error: error.message,
