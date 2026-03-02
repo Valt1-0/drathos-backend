@@ -1,7 +1,7 @@
 services:
   drathos-backend:
     container_name: drathos-backend
-    image: registry.home.arpa/drathos-backend:latest
+    image: valt1n/drathos-backend:latest
     build:
       context: .
     restart: unless-stopped
@@ -29,14 +29,14 @@ services:
     labels:
       - "traefik.enable=true"
       - "tag=app-external"
-      # Interface web accessible sur le même domaine
+      # Web interface accessible on the same domain
       - "traefik.http.routers.drathos-backend.rule=Host(`drathos.home.arpa`)"
       - "traefik.http.routers.drathos-backend.entrypoints=https"
       - "traefik.http.routers.drathos-backend.service=drathos-backend"
       - "traefik.http.services.drathos-backend.loadbalancer.server.port=5001"
       - "traefik.http.routers.drathos-backend.tls=true"
       - "traefik.http.routers.drathos-backend.tls.certresolver=stepca"
-      # Désactiver le buffering pour les gros téléchargements
+      # Disable buffering for large downloads
       - "traefik.http.middlewares.nobuffering.buffering.maxRequestBodyBytes=0"
       - "traefik.http.middlewares.nobuffering.buffering.maxResponseBodyBytes=0"
       - "traefik.http.middlewares.nobuffering.buffering.memRequestBodyBytes=0"
