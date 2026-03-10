@@ -109,11 +109,18 @@ export const addGame = (req, res) => {
       const safePath = sanitizePath(GAME_FILES_DIR, filename);
 
       if (fs.existsSync(safePath)) {
-        fs.unlinkSync(req.file.path);
-        return res.status(400).json({
-          error: true,
-          message: "Un fichier avec ce nom existe déjà",
-        });
+        // Check if a DB record exists for this file — if not, it's an orphan
+        const existingGame = await Game.findOne({ zipFileName: filename });
+        if (existingGame) {
+          fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            error: true,
+            message: "Un fichier avec ce nom existe déjà",
+          });
+        }
+        // Orphaned file: overwrite it
+        logger.warn(`[addGame] Overwriting orphaned file: ${filename}`);
+        fs.unlinkSync(safePath);
       }
 
       fs.renameSync(req.file.path, safePath);

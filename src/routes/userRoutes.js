@@ -16,7 +16,7 @@ import {
   validateUserId,
   validateRoleUpdate,
 } from "../middlewares/validationMiddleware.js";
-import { authMiddleware, requireAdmin } from "../middlewares/authMiddleware.js";
+import { authMiddleware, requireAdminOrModerator } from "../middlewares/authMiddleware.js";
 import { authLimiter } from "../middlewares/rateLimitMiddleware.js";
 
 const router = express.Router();
@@ -50,6 +50,6 @@ router.post(
 router.delete("/profile/picture", authMiddleware, deleteProfilePicture);
 
 // ==================== ADMIN ====================
-router.patch("/:userId/role", authMiddleware, requireAdmin, validateRoleUpdate, updateUserRole);
+router.patch("/:userId/role", authMiddleware, requireAdminOrModerator, validateRoleUpdate, updateUserRole);
 
 export default router;

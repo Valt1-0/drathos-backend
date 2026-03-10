@@ -49,3 +49,29 @@ export const requireAdmin = (req, res, next) => {
     res.status(500).json({ message: "Server error during authorization check." });
   }
 };
+
+/**
+ * Middleware pour vérifier que l'utilisateur est admin ou modérateur
+ */
+export const requireAdminOrModerator = (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized. Please authenticate first."
+      });
+    }
+
+    if (req.user.role !== "admin" && req.user.role !== "moderator") {
+      logger.warn(`[requireAdminOrModerator] User ${req.user.username} attempted privileged action without permission`);
+      return res.status(403).json({
+        message: "Forbidden. Admin or moderator access required."
+      });
+    }
+
+    logger.info(`[requireAdminOrModerator] Access granted for ${req.user.username} (${req.user.role})`);
+    next();
+  } catch (error) {
+    logger.error("[requireAdminOrModerator] Error:", error.message);
+    res.status(500).json({ message: "Server error during authorization check." });
+  }
+};

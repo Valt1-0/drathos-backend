@@ -140,7 +140,9 @@ export const register = async (req, res) => {
 
   try {
     if (await User.exists({ username })) {
-      return res.status(400).json({ error: true, message: "User already exists" });
+      return res
+        .status(400)
+        .json({ error: true, message: "User already exists" });
     }
 
     const isFirstUser = (await User.countDocuments()) === 0;
@@ -164,7 +166,9 @@ export const login = async (req, res) => {
   try {
     const user = await User.findOne({ username });
     if (!user || !(await user.matchPassword(password))) {
-      return res.status(400).json({ error: true, message: "Invalid credentials" });
+      return res
+        .status(400)
+        .json({ error: true, message: "Invalid credentials" });
     }
 
     const token = await signToken(user);
@@ -376,14 +380,14 @@ export const updateUserRole = async (req, res) => {
 
     if (!VALID_ROLES.includes(role)) {
       return res.status(400).json({
-        message: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`
+        message: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`,
       });
     }
 
     // Prevent self-demotion
     if (req.user.id === userId) {
       return res.status(400).json({
-        message: "You cannot change your own role"
+        message: "You cannot change your own role",
       });
     }
 
@@ -392,18 +396,21 @@ export const updateUserRole = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Prevent demoting other admins (only the user themselves or a "super" mechanism could do that)
-    if (user.role === "admin" && role !== "admin") {
-      return res.status(403).json({
-        message: "Cannot demote another admin"
-      });
+    if (role === "admin") {
+      return res
+        .status(403)
+        .json({ message: "The admin role cannot be assigned" });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({ message: "Cannot change an admin's role" });
     }
 
     await User.updateOne({ _id: userId }, { role });
 
     res.json({
       message: `User ${user.username} role updated to ${role}`,
-      user: { _id: user._id, username: user.username, role }
+      user: { _id: user._id, username: user.username, role },
     });
   } catch (error) {
     logger.error("[userController] updateUserRole error:", error);
