@@ -1,6 +1,6 @@
 {
   "name": "drathos-backend",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": "https://github.com/Valt1-0",
   "main": "app.js",
   "type": "module",
