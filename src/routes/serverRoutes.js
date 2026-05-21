@@ -3,12 +3,15 @@ const router = express.Router();
 import {
   getServerStatus,
   getServerHealth,
+  getServerSettings,
+  patchServerSettings,
 } from "../controllers/serverController.js";
+import { authMiddleware, requireAdmin } from "../middlewares/authMiddleware.js";
 
-// Health check rapide (sans auth)
 router.get("/health", getServerHealth);
-
-// Status détaillé
 router.get("/status", getServerStatus);
+
+router.get("/settings", authMiddleware, getServerSettings);
+router.patch("/settings", authMiddleware, requireAdmin, patchServerSettings);
 
 export default router;

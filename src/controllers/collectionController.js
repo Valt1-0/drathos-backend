@@ -1,29 +1,36 @@
-// drathos-backend/src/controllers/collectionController.js
-
 import logger from "../utils/logger.js";
 import Collection from "../models/collectionModel.js";
+import mongoose from "mongoose";
 
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+const ICON_RE = /^[a-zA-Z0-9_-]{1,50}$/;
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
-// Créer une nouvelle collection
 export const createCollection = async (req, res) => {
   try {
     const userId = req.user.id;
     const { name, description, icon, color } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ message: "Le nom de la collection est requis" });
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    if (!trimmedName || trimmedName.length > 100) {
+      return res.status(400).json({ message: "Le nom est requis (max 100 caractères)." });
+    }
+    if (icon !== undefined && !ICON_RE.test(icon)) {
+      return res.status(400).json({ message: "Icône invalide." });
+    }
+    if (color !== undefined && !COLOR_RE.test(color)) {
+      return res.status(400).json({ message: "Couleur invalide (format #rrggbb attendu)." });
     }
 
-    // Vérifier si une collection avec ce nom existe déjà pour cet utilisateur
-    const existing = await Collection.findOne({ userId, name });
+    const existing = await Collection.findOne({ userId, name: trimmedName });
     if (existing) {
       return res.status(409).json({ message: "Une collection avec ce nom existe déjà" });
     }
 
     const collection = new Collection({
       userId,
-      name,
-      description,
+      name: trimmedName,
+      description: typeof description === "string" ? description.trim().substring(0, 500) : "",
       icon: icon || "FaFolder",
       color: color || "#6366f1",
       type: "custom",
@@ -39,7 +46,6 @@ export const createCollection = async (req, res) => {
   }
 };
 
-// Récupérer toutes les collections d'un utilisateur
 export const getUserCollections = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -51,7 +57,6 @@ export const getUserCollections = async (req, res) => {
       })
       .sort({ isPinned: -1, createdAt: -1 });
 
-    // Ajouter le count des jeux
     const collectionsWithCount = collections.map(col => ({
       ...col.toObject(),
       gamesCount: col.games.length
@@ -64,7 +69,6 @@ export const getUserCollections = async (req, res) => {
   }
 };
 
-// Récupérer une collection spécifique
 export const getCollectionById = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -87,7 +91,6 @@ export const getCollectionById = async (req, res) => {
   }
 };
 
-// Mettre à jour une collection
 export const updateCollection = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -100,16 +103,30 @@ export const updateCollection = async (req, res) => {
       return res.status(404).json({ message: "Collection non trouvée" });
     }
 
-    // Vérifier si le nouveau nom existe déjà (si changé)
-    if (name && name !== collection.name) {
-      const existing = await Collection.findOne({ userId, name });
+    if (icon !== undefined && !ICON_RE.test(icon)) {
+      return res.status(400).json({ message: "Icône invalide." });
+    }
+    if (color !== undefined && !COLOR_RE.test(color)) {
+      return res.status(400).json({ message: "Couleur invalide (format #rrggbb attendu)." });
+    }
+
+    const trimmedName = typeof name === "string" ? name.trim() : undefined;
+    if (trimmedName !== undefined && trimmedName.length === 0) {
+      return res.status(400).json({ message: "Le nom ne peut pas être vide." });
+    }
+    if (trimmedName && trimmedName.length > 100) {
+      return res.status(400).json({ message: "Le nom est trop long (max 100 caractères)." });
+    }
+
+    if (trimmedName && trimmedName !== collection.name) {
+      const existing = await Collection.findOne({ userId, name: trimmedName });
       if (existing) {
         return res.status(409).json({ message: "Une collection avec ce nom existe déjà" });
       }
-      collection.name = name;
+      collection.name = trimmedName;
     }
 
-    if (description !== undefined) collection.description = description;
+    if (description !== undefined) collection.description = typeof description === "string" ? description.trim().substring(0, 500) : "";
     if (icon) collection.icon = icon;
     if (color) collection.color = color;
 
@@ -123,7 +140,6 @@ export const updateCollection = async (req, res) => {
   }
 };
 
-// Supprimer une collection
 export const deleteCollection = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -142,9 +158,6 @@ export const deleteCollection = async (req, res) => {
   }
 };
 
-// ==================== GESTION DES JEUX ====================
-
-// Ajouter des jeux à une collection
 export const addGamesToCollection = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -154,6 +167,9 @@ export const addGamesToCollection = async (req, res) => {
     if (!gameIds || !Array.isArray(gameIds) || gameIds.length === 0) {
       return res.status(400).json({ message: "La liste des jeux est requise" });
     }
+    if (gameIds.some((id) => !isValidObjectId(id))) {
+      return res.status(400).json({ message: "Un ou plusieurs gameIds sont invalides." });
+    }
 
     const collection = await Collection.findOne({ _id: id, userId });
 
@@ -161,7 +177,6 @@ export const addGamesToCollection = async (req, res) => {
       return res.status(404).json({ message: "Collection non trouvée" });
     }
 
-    // Ajouter chaque jeu (la méthode addGame gère les doublons)
     gameIds.forEach(gameId => {
       collection.addGame(gameId);
     });
@@ -169,7 +184,6 @@ export const addGamesToCollection = async (req, res) => {
     collection.updatedAt = Date.now();
     await collection.save();
 
-    // Repopulate pour retourner les jeux complets
     await collection.populate({
       path: "games.serverGameId",
       select: "name coverUrl genres platforms"
@@ -182,7 +196,6 @@ export const addGamesToCollection = async (req, res) => {
   }
 };
 
-// Retirer des jeux d'une collection
 export const removeGamesFromCollection = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -192,6 +205,9 @@ export const removeGamesFromCollection = async (req, res) => {
     if (!gameIds || !Array.isArray(gameIds) || gameIds.length === 0) {
       return res.status(400).json({ message: "La liste des jeux est requise" });
     }
+    if (gameIds.some((id) => !isValidObjectId(id))) {
+      return res.status(400).json({ message: "Un ou plusieurs gameIds sont invalides." });
+    }
 
     const collection = await Collection.findOne({ _id: id, userId });
 
@@ -199,7 +215,6 @@ export const removeGamesFromCollection = async (req, res) => {
       return res.status(404).json({ message: "Collection non trouvée" });
     }
 
-    // Retirer chaque jeu
     gameIds.forEach(gameId => {
       collection.removeGame(gameId);
     });

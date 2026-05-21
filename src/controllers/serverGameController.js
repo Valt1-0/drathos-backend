@@ -16,12 +16,25 @@ import {
   validateFileName,
   validateFileAccess,
   cleanFileName,
+  validateMagicBytes,
 } from "../utils/pathValidator.js";
 
 import { emitGameAdded } from "../socket.js";
+import { getSettings } from "../utils/serverSettings.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const COMPOUND_EXTENSIONS = [".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst"];
+
+function splitArchiveExtension(filename) {
+  const lower = filename.toLowerCase();
+  const compound = COMPOUND_EXTENSIONS.find((ext) => lower.endsWith(ext));
+  if (compound) {
+    return { baseName: filename.slice(0, filename.length - compound.length), extension: compound };
+  }
+  return { baseName: path.parse(filename).name, extension: path.extname(filename).toLowerCase() };
+}
 
 const GAME_FILES_DIR =
   process.env.GAME_FILES_DIR ||
@@ -36,34 +49,50 @@ if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 }
 
-const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz"];
+const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz"];
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, TEMP_UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    cb(null, `upload-${Date.now()}-${file.originalname}`);
+    const ext = path.extname(file.originalname).replace(/[^a-z0-9.]/gi, "").toLowerCase();
+    cb(null, `upload-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
   },
 });
 
 const fileFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (!allowedExtensions.includes(ext)) {
+  const { extension: ext } = splitArchiveExtension(file.originalname);
+  const singleExt = path.extname(file.originalname).toLowerCase();
+  if (!allowedExtensions.includes(ext) && !allowedExtensions.includes(singleExt)) {
     return cb(new Error("Only compressed files are allowed."), false);
   }
   cb(null, true);
 };
 
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 50 * 1024 * 1024 * 1024, // 50 GB max
-  },
-}).single("zipFile");
+export const addGame = async (req, res) => {
+  const settings = await getSettings();
+  const fileSizeLimit = settings.maxGameSizeGB * 1024 * 1024 * 1024;
 
-export const addGame = (req, res) => {
+  const upload = multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: fileSizeLimit },
+  }).single("zipFile");
+  try {
+    const stats = fs.statfsSync(GAME_FILES_DIR);
+    const freeBytes = stats.bavail * stats.bsize;
+    const MIN_FREE_BYTES = 10 * 1024 * 1024 * 1024;
+    if (freeBytes < MIN_FREE_BYTES) {
+      return res.status(507).json({
+        error: true,
+        message: "Espace disque insuffisant sur le serveur (minimum 10 GB requis).",
+      });
+    }
+  } catch {
+    // fs.statfsSync not available on this platform, skip disk check
+  }
+
   upload(req, res, async (err) => {
     if (err) {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
@@ -94,35 +123,28 @@ export const addGame = (req, res) => {
       const genreIds = (gameData.genres || []).map((g) => g.id);
       const genres = await fetchGenresByIds(genreIds);
 
-      // Extraire les informations de développeur et éditeur
       const { developer, publisher } = extractCompanies(
         gameData.involved_companies,
       );
 
-      const originalName = path.parse(req.file.originalname).name;
-      const extension = path.extname(req.file.originalname).toLowerCase();
+      const { baseName: originalName, extension } = splitArchiveExtension(req.file.originalname);
 
       const cleanName = cleanFileName(originalName);
       const filename = `${cleanName}${extension}`;
 
       validateFileName(filename);
-      const safePath = sanitizePath(GAME_FILES_DIR, filename);
 
-      if (fs.existsSync(safePath)) {
-        // Check if a DB record exists for this file — if not, it's an orphan
-        const existingGame = await Game.findOne({ zipFileName: filename });
-        if (existingGame) {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({
-            error: true,
-            message: "Un fichier avec ce nom existe déjà",
-          });
-        }
-        // Orphaned file: overwrite it
-        logger.warn(`[addGame] Overwriting orphaned file: ${filename}`);
-        fs.unlinkSync(safePath);
+      if (!validateMagicBytes(req.file.path, extension)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({
+          error: true,
+          message: "Le fichier ne correspond pas à son extension (signature invalide).",
+        });
       }
 
+      const safePath = sanitizePath(GAME_FILES_DIR, filename);
+      // Same name = same game + same version → overwrite
+      if (fs.existsSync(safePath)) fs.unlinkSync(safePath);
       fs.renameSync(req.file.path, safePath);
 
       const newGame = new Game({
@@ -154,16 +176,7 @@ export const addGame = (req, res) => {
                   typeof multiplayer === "string"
                     ? JSON.parse(multiplayer)
                     : multiplayer;
-                let modes = [];
-                if (Array.isArray(parsed.modes)) {
-                  modes = parsed.modes;
-                } else if (parsed.modes) {
-                  try {
-                    modes = JSON.parse(parsed.modes);
-                  } catch {
-                    modes = [];
-                  }
-                }
+                const modes = Array.isArray(parsed.modes) ? parsed.modes : [];
                 return {
                   enabled: parsed.enabled === "true" || parsed.enabled === true,
                   type: parsed.type || null,
@@ -192,7 +205,6 @@ export const addGame = (req, res) => {
 
       await newGame.save();
 
-      // Broadcast notification to all connected clients
       emitGameAdded(
         { id: newGame._id, name: newGame.name, coverUrl: newGame.coverUrl },
         { id: req.user.id, username: req.user.username },
@@ -212,6 +224,13 @@ export const addGame = (req, res) => {
         } catch (unlinkError) {
           /* ignore */
         }
+      }
+
+      if (error.code === 11000) {
+        return res.status(409).json({
+          error: true,
+          message: "Ce jeu existe déjà sur le serveur (même IGDB ID et même version).",
+        });
       }
 
       if (
@@ -238,7 +257,7 @@ export const getAllGames = async (req, res) => {
   try {
     const { page, limit } = req.query;
 
-    // Pagination optionnelle — sans params, retourne tout (compatibilité frontend)
+    // Optional pagination — without params, returns all (frontend compatibility)
     if (page && limit) {
       const pageNum = Math.max(1, parseInt(page));
       const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
@@ -250,8 +269,11 @@ export const getAllGames = async (req, res) => {
       return res.status(200).json({ games, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
     }
 
-    const games = await Game.find().sort({ addedDate: -1 });
-    res.status(200).json(games);
+    const [games, total] = await Promise.all([
+      Game.find().sort({ addedDate: -1 }).limit(100),
+      Game.countDocuments(),
+    ]);
+    res.status(200).json({ games, total });
   } catch (error) {
     logger.error("[getAllGames] Error:", error.message);
     res.status(500).json({ error: true, message: "Error fetching games." });
@@ -271,7 +293,16 @@ export const getGameById = async (req, res) => {
   }
 };
 
-export const updateGame = (req, res) => {
+export const updateGame = async (req, res) => {
+  const settings = await getSettings();
+  const fileSizeLimit = settings.maxGameSizeGB * 1024 * 1024 * 1024;
+
+  const upload = multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: fileSizeLimit },
+  }).single("zipFile");
+
   upload(req, res, async (err) => {
     if (err) {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) {
@@ -298,12 +329,19 @@ export const updateGame = (req, res) => {
       if (genre) game.genres = [genre.toLowerCase()];
 
       if (req.file) {
-        const originalName = path.parse(req.file.originalname).name;
-        const extension = path.extname(req.file.originalname).toLowerCase();
+        const { baseName: originalName, extension } = splitArchiveExtension(req.file.originalname);
         const cleanName = cleanFileName(originalName);
         const filename = `${cleanName}${extension}`;
 
         validateFileName(filename);
+
+        if (!validateMagicBytes(req.file.path, extension)) {
+          fs.unlinkSync(req.file.path);
+          return res.status(400).json({
+            error: true,
+            message: "Le fichier ne correspond pas à son extension (signature invalide).",
+          });
+        }
 
         const newPath = sanitizePath(GAME_FILES_DIR, filename);
 
@@ -507,125 +545,3 @@ export const downloadGame = async (req, res) => {
     }
   }
 };
-
-export const configureExecutable = async (req, res) => {
-  try {
-    const { gameId } = req.params;
-    const {
-      fileName,
-      relativePath,
-      arguments: launchArgs,
-      workingDirectory,
-      requiresAdmin,
-      compatibilityMode,
-      prelaunchCommands,
-      postlaunchCommands,
-      environmentVariables,
-    } = req.body;
-
-    const game = await Game.findById(gameId);
-    if (!game) {
-      return res.status(404).json({ message: "Jeu non trouvé" });
-    }
-
-    game.executable = {
-      fileName,
-      relativePath,
-      arguments: launchArgs || "",
-      workingDirectory,
-      requiresAdmin: requiresAdmin || false,
-      compatibilityMode,
-    };
-
-    if (prelaunchCommands || postlaunchCommands || environmentVariables) {
-      game.launchConfig = {
-        prelaunchCommands: prelaunchCommands || [],
-        postlaunchCommands: postlaunchCommands || [],
-        environmentVariables: environmentVariables || new Map(),
-      };
-    }
-
-    await game.save();
-
-    res.status(200).json({
-      message: "Configuration executable mise à jour",
-      executable: game.executable,
-    });
-  } catch (error) {
-    logger.error("[configureExecutable] Error:", error);
-    res.status(500).json({ error: true, message: "Erreur serveur" });
-  }
-};
-
-export const listGameFiles = async (req, res) => {
-  try {
-    const { gameId } = req.params;
-
-    const installedGame = await InstalledGame.findOne({
-      userId: req.user.id,
-      serverGameId: gameId,
-    });
-
-    if (!installedGame) {
-      return res.status(404).json({ message: "Jeu non installé" });
-    }
-
-    const gamePath = installedGame.path;
-
-    if (!fs.existsSync(gamePath)) {
-      return res.status(404).json({ message: "Fichiers du jeu non trouvés" });
-    }
-
-    const files = await listFilesRecursive(gamePath, gamePath);
-
-    const executables = files.filter(
-      (file) =>
-        file.extension === ".exe" ||
-        file.extension === ".bat" ||
-        file.extension === ".cmd" ||
-        file.name.toLowerCase().includes("start") ||
-        file.name.toLowerCase().includes("launch") ||
-        file.name.toLowerCase().includes("game"),
-    );
-
-    res.status(200).json({
-      allFiles: files,
-      suggestedExecutables: executables,
-      gamePath: gamePath,
-    });
-  } catch (error) {
-    logger.error("[listGameFiles] Error:", error);
-    res.status(500).json({ error: true, message: "Erreur serveur" });
-  }
-};
-
-async function listFilesRecursive(dir, baseDir) {
-  const files = [];
-
-  async function scanDirectory(currentDir) {
-    const items = await fs.promises.readdir(currentDir);
-    await Promise.all(
-      items.map(async (item) => {
-        const fullPath = path.join(currentDir, item);
-        const stats = await fs.promises.stat(fullPath);
-        const relativePath = path.relative(baseDir, fullPath);
-
-        if (stats.isDirectory()) {
-          await scanDirectory(fullPath);
-        } else {
-          files.push({
-            name: item,
-            relativePath,
-            fullPath,
-            extension: path.extname(item).toLowerCase(),
-            size: stats.size,
-            isExecutable: path.extname(item).toLowerCase() === ".exe",
-          });
-        }
-      })
-    );
-  }
-
-  await scanDirectory(dir);
-  return files;
-}

@@ -1,5 +1,48 @@
 import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
+import { ROLES } from "../utils/constants.js";
+import mongoose from "mongoose";
+
+const blacklist = () => mongoose.connection.collection("token_blacklist");
+
+// In-memory cache — populated from DB on startup, kept in sync on revoke.
+const tokenBlacklist = new Map();
+
+export const loadBlacklist = async () => {
+  try {
+    const col = blacklist();
+    await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, background: true });
+    await col.createIndex({ token: 1 }, { unique: true, background: true });
+
+    const docs = await col.find({ expiresAt: { $gt: new Date() } }).toArray();
+    for (const { token, expiresAt } of docs) {
+      tokenBlacklist.set(token, expiresAt.getTime());
+    }
+    logger.info(`[authMiddleware] Blacklist loaded: ${docs.length} token(s)`);
+  } catch (err) {
+    logger.error("[authMiddleware] Failed to load blacklist:", err.message);
+  }
+};
+
+export const revokeToken = (token) => {
+  try {
+    const decoded = jwt.decode(token);
+    if (decoded?.exp) {
+      const expMs = decoded.exp * 1000;
+      tokenBlacklist.set(token, expMs);
+      blacklist().insertOne({ token, expiresAt: new Date(expMs) }).catch(() => {});
+    }
+  } catch {
+    // ignore malformed tokens
+  }
+};
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, expiry] of tokenBlacklist) {
+    if (now > expiry) tokenBlacklist.delete(token);
+  }
+}, 60 * 60 * 1000).unref();
 
 export const authMiddleware = async (req, res, next) => {
   try {
@@ -9,9 +52,13 @@ export const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ message: "No token provided." });
     }
 
+    if (tokenBlacklist.has(token)) {
+      return res.status(401).json({ message: "Token revoked." });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_TOKEN);
 
-    req.user = decoded.user; // Correct
+    req.user = decoded.user;
     next();
   } catch (error) {
     logger.error("[authMiddleware] Error:", error.message);
@@ -24,9 +71,6 @@ export const authMiddleware = async (req, res, next) => {
   }
 };
 
-/**
- * Middleware pour vérifier que l'utilisateur est admin
- */
 export const requireAdmin = (req, res, next) => {
   try {
     if (!req.user) {
@@ -35,7 +79,7 @@ export const requireAdmin = (req, res, next) => {
       });
     }
 
-    if (req.user.role !== "admin") {
+    if (req.user.role !== ROLES.ADMIN) {
       logger.warn(`[requireAdmin] User ${req.user.username} attempted admin action without permission`);
       return res.status(403).json({
         message: "Forbidden. Admin access required."
@@ -50,9 +94,6 @@ export const requireAdmin = (req, res, next) => {
   }
 };
 
-/**
- * Middleware pour vérifier que l'utilisateur est admin ou modérateur
- */
 export const requireAdminOrModerator = (req, res, next) => {
   try {
     if (!req.user) {
@@ -61,7 +102,7 @@ export const requireAdminOrModerator = (req, res, next) => {
       });
     }
 
-    if (req.user.role !== "admin" && req.user.role !== "moderator") {
+    if (req.user.role !== ROLES.ADMIN && req.user.role !== ROLES.MODERATOR) {
       logger.warn(`[requireAdminOrModerator] User ${req.user.username} attempted privileged action without permission`);
       return res.status(403).json({
         message: "Forbidden. Admin or moderator access required."

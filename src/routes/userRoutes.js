@@ -2,6 +2,7 @@ import express from "express";
 import {
   register,
   login,
+  logout,
   getAllUsers,
   getUserProfile,
   updateProfileVisibility,
@@ -23,6 +24,7 @@ const router = express.Router();
 
 router.post("/register", authLimiter, validateRegister, register);
 router.post("/login", authLimiter, validateLogin, login);
+router.post("/logout", authMiddleware, logout);
 
 router.get("/profiles", authMiddleware, getAllUsers);
 router.get("/profiles/:userId", authMiddleware, validateUserId, getUserProfile);
@@ -49,7 +51,6 @@ router.post(
 
 router.delete("/profile/picture", authMiddleware, deleteProfilePicture);
 
-// ==================== ADMIN ====================
 router.patch("/:userId/role", authMiddleware, requireAdminOrModerator, validateRoleUpdate, updateUserRole);
 
 export default router;

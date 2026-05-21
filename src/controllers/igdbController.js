@@ -12,8 +12,8 @@ const fetchWithTimeout = (url, options = {}) => {
 
 let accessToken = null;
 let tokenExpiry = 0;
+let tokenPromise = null;
 
-// Cache in-memory pour les détails de jeux (TTL 1h)
 const igdbCache = new Map();
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -28,11 +28,14 @@ const setCache = (key, data) => {
   igdbCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 };
 
-async function getToken() {
-  if (accessToken && Date.now() < tokenExpiry) {
-    return accessToken;
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of igdbCache) {
+    if (now > entry.expiresAt) igdbCache.delete(key);
   }
+}, 30 * 60 * 1000).unref();
 
+async function refreshToken() {
   const clientId = process.env.TWITCH_CLIENT_ID;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET;
 
@@ -48,20 +51,40 @@ async function getToken() {
 
   const data = await res.json();
   accessToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000; // 60s de marge
-
+  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
   return accessToken;
+}
+
+async function getToken() {
+  if (accessToken && Date.now() < tokenExpiry) return accessToken;
+  // Deduplicate concurrent refresh requests — all callers share the same promise
+  if (!tokenPromise) {
+    tokenPromise = refreshToken().finally(() => { tokenPromise = null; });
+  }
+  return tokenPromise;
 }
 
 export const searchGames = async (req, res) => {
   try {
-    const { game } = req.query; // Extraction du terme de recherche depuis l'URL
+    const { game } = req.query;
 
-    if (!game) {
+    if (!game || typeof game !== "string" || game.trim().length === 0) {
       return res.status(400).json({ error: "Paramètre 'game' requis." });
     }
 
-    const token = await getToken(); // Obtention du token OAuth
+    if (game.length > 100) {
+      return res.status(400).json({ error: "Recherche trop longue (max 100 caractères)." });
+    }
+
+    const sanitizedGame = game
+      .replace(/[^a-zA-Z0-9\s\-.,éèêëàâùûüîïôœçÉÈÊËÀÂÙÛÜÎÏÔŒÇ]/g, "")
+      .trim();
+
+    if (!sanitizedGame) {
+      return res.status(400).json({ error: "Paramètres de recherche invalides." });
+    }
+
+    const token = await getToken();
 
     const igdbRes = await fetchWithTimeout("https://api.igdb.com/v4/games", {
       method: "POST",
@@ -70,7 +93,7 @@ export const searchGames = async (req, res) => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "text/plain",
       },
-      body: `search "${game}"; fields id,name,first_release_date; limit 10;`,
+      body: `search "${sanitizedGame}"; fields id,name,first_release_date; limit 10;`,
     });
 
     if (!igdbRes.ok) {
@@ -137,7 +160,6 @@ export const extractCompanies = (involvedCompanies) => {
     if (company.publisher && !publisher && company.company?.name) {
       publisher = company.company.name;
     }
-    // Arrêter si on a trouvé les deux
     if (developer && publisher) break;
   }
 
@@ -145,6 +167,8 @@ export const extractCompanies = (involvedCompanies) => {
 };
 
 export const fetchGenresByIds = async (ids) => {
+  if (!ids || ids.length === 0) return [];
+
   try {
     const token = await getToken();
 
@@ -158,16 +182,15 @@ export const fetchGenresByIds = async (ids) => {
       body: `fields id, name, slug; where id = (${ids.join(",")});`,
     });
 
-    const data = await response.json(); // ✅ lire une seule fois
+    const data = await response.json();
     if (!response.ok) {
-      logger.error("IGDB error body:", data); // on peut loguer l'erreur ici
+      logger.error("IGDB error body:", data);
       throw new Error("IGDB genres fetch failed: " + response.status);
     }
 
-    return data; // ✅ pas de deuxième appel à .json()
+    return data;
   } catch (error) {
     logger.error("Error in fetchGenresByIds:", error);
     throw error;
   }
 };
-

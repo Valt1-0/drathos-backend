@@ -5,10 +5,19 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const { combine, timestamp, printf, colorize, errors } = winston.format;
+const { combine, timestamp, printf, colorize, errors, splat } = winston.format;
 
-const logFormat = printf(({ level, message, timestamp, stack }) => {
-  return `${timestamp} [${level}]: ${stack || message}`;
+const formatExtra = (args) => {
+  if (!Array.isArray(args) || args.length === 0) return "";
+  return " " + args.map((a) => {
+    if (a instanceof Error) return a.stack || a.message;
+    if (typeof a === "object") return JSON.stringify(a);
+    return String(a);
+  }).join(" ");
+};
+
+const logFormat = printf(({ level, message, timestamp, stack, [Symbol.for("splat")]: splatArgs }) => {
+  return `${timestamp} [${level}]: ${stack || message}${formatExtra(splatArgs)}`;
 });
 
 const logger = winston.createLogger({
@@ -16,11 +25,12 @@ const logger = winston.createLogger({
   format: combine(
     timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
     errors({ stack: true }),
+    splat(),
     logFormat
   ),
   transports: [
     new winston.transports.Console({
-      format: combine(colorize(), timestamp({ format: "HH:mm:ss" }), logFormat),
+      format: combine(colorize(), timestamp({ format: "HH:mm:ss" }), errors({ stack: true }), splat(), logFormat),
     }),
     new winston.transports.File({
       filename: path.join(__dirname, "../../logs/error.log"),

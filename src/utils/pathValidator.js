@@ -1,65 +1,57 @@
-// src/utils/pathValidator.js - Validation et sécurisation des chemins
-
 import path from "path";
 import fs from "fs";
 
-/**
- * Valide et sécurise un chemin de fichier
- * Empêche les attaques de type Path Traversal (../../etc/passwd)
- */
 export function sanitizePath(basePath, userPath) {
-  // Résoudre les chemins absolus
-  const resolvedBase = path.resolve(basePath);
-  const resolvedPath = path.resolve(basePath, userPath);
+  // Resolve symlinks on the base directory (must already exist)
+  const resolvedBase = fs.realpathSync(path.resolve(basePath));
+  const joined = path.resolve(resolvedBase, userPath);
 
-  // CRITIQUE: Vérifier que le chemin final est bien dans le dossier autorisé
-  if (
-    !resolvedPath.startsWith(resolvedBase + path.sep) &&
-    resolvedPath !== resolvedBase
-  ) {
-    throw new Error("Accès interdit: chemin invalide");
+  if (fs.existsSync(joined)) {
+    // Target exists — resolve its symlinks and verify it stays within base
+    const realTarget = fs.realpathSync(joined);
+    if (realTarget !== resolvedBase && !realTarget.startsWith(resolvedBase + path.sep)) {
+      throw new Error("Access denied: path escapes base directory");
+    }
+    return realTarget;
   }
 
-  return resolvedPath;
+  // Target doesn't exist yet (new upload) — string boundary check is sufficient
+  const relative = path.relative(resolvedBase, joined);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Access denied: invalid path");
+  }
+  return joined;
 }
 
-/**
- * Valide le nom d'un fichier uploadé
- * Empêche les noms de fichiers malveillants
- */
 export function validateFileName(filename) {
   if (!filename || typeof filename !== "string") {
     throw new Error("Nom de fichier invalide");
   }
 
-  // Interdire les caractères dangereux dans les noms de fichiers
   const forbiddenChars = /[<>:"|?*\x00-\x1F]/g;
   if (forbiddenChars.test(filename)) {
     throw new Error("Nom de fichier contient des caractères interdits");
   }
 
-  // Interdire les tentatives de path traversal
-  // ✅ On vérifie uniquement ".." et les slashes (pas les underscores ou tirets)
   if (filename.includes("..")) {
     throw new Error(
       "Nom de fichier invalide: tentative de path traversal détectée"
     );
   }
 
-  // Interdire les slashes dans le nom (mais après nettoyage il ne devrait pas y en avoir)
   if (filename.includes("/") || filename.includes("\\")) {
     throw new Error("Nom de fichier invalide: chemin non autorisé");
   }
 
-  // Vérifier l'extension
-  const ext = path.extname(filename).toLowerCase();
-  const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz"];
+  const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".tar.gz", ".tar.bz2"];
+  const lowerFilename = filename.toLowerCase();
+  const hasAllowedExtension = allowedExtensions.some((ext) => lowerFilename.endsWith(ext));
 
-  if (!allowedExtensions.includes(ext)) {
+  if (!hasAllowedExtension) {
+    const ext = path.extname(filename).toLowerCase();
     throw new Error(`Extension non autorisée: ${ext}`);
   }
 
-  // Limiter la longueur du nom
   if (filename.length > 255) {
     throw new Error("Nom de fichier trop long (max 255 caractères)");
   }
@@ -67,20 +59,13 @@ export function validateFileName(filename) {
   return filename;
 }
 
-/**
- * Vérifie qu'un fichier existe et est dans le bon dossier
- * Utilisé avant de servir un fichier en téléchargement
- */
 export function validateFileAccess(filePath, allowedDir) {
-  // Vérifier que le fichier est dans le dossier autorisé
   const sanitized = sanitizePath(allowedDir, filePath);
 
-  // Vérifier que le fichier existe
   if (!fs.existsSync(sanitized)) {
     throw new Error("Fichier introuvable");
   }
 
-  // Vérifier que c'est bien un fichier (pas un dossier)
   const stats = fs.statSync(sanitized);
   if (!stats.isFile()) {
     throw new Error("Le chemin ne pointe pas vers un fichier");
@@ -89,16 +74,40 @@ export function validateFileAccess(filePath, allowedDir) {
   return sanitized;
 }
 
-/**
- * Nettoie un nom de fichier en enlevant les caractères spéciaux
- * Utilisé pour créer des noms de fichiers sûrs
- */
+export function validateMagicBytes(filePath, extension) {
+  const lowerExt = extension.toLowerCase();
+
+  const SIGNATURES = {
+    ".zip": { bytes: [0x50, 0x4b], offset: 0 },            // PK
+    ".7z":  { bytes: [0x37, 0x7a, 0xbc, 0xaf], offset: 0 }, // 7z¼¯
+    ".rar": { bytes: [0x52, 0x61, 0x72, 0x21], offset: 0 }, // Rar!
+    ".gz":  { bytes: [0x1f, 0x8b], offset: 0 },              // gzip
+    ".tgz": { bytes: [0x1f, 0x8b], offset: 0 },
+    ".bz2": { bytes: [0x42, 0x5a, 0x68], offset: 0 },        // BZh
+  };
+
+  const rule = SIGNATURES[lowerExt];
+  if (!rule) return true; // .tar and others with no known signature: pass through
+
+  const bufSize = rule.offset + rule.bytes.length;
+  const buf = Buffer.alloc(bufSize);
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "r");
+    const bytesRead = fs.readSync(fd, buf, 0, bufSize, 0);
+    if (bytesRead < bufSize) return false;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+
+  return rule.bytes.every((b, i) => buf[rule.offset + i] === b);
+}
+
 export function cleanFileName(filename) {
-  // Garder uniquement les caractères alphanumériques, tirets, underscores
   return filename
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "_")
-    .replace(/_{2,}/g, "_") // Remplacer les underscores multiples par un seul
-    .substring(0, 200); // Limiter la longueur
+    .replace(/_{2,}/g, "_")
+    .substring(0, 200);
 }

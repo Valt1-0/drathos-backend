@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import { ROLES, PASSWORD_REGEX, PASSWORD_MIN_LENGTH } from "../utils/constants.js";
 
 const UserSchema = new mongoose.Schema(
   {
@@ -13,13 +14,8 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: [true, "Password is required"],
       validate: {
-        validator: function (v) {
-          return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(
-            v
-          );
-        },
-        message:
-          "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.",
+        validator: (v) => v.length >= PASSWORD_MIN_LENGTH && PASSWORD_REGEX.test(v),
+        message: "Password must be at least 8 characters and include uppercase, lowercase, digit and special character (@$!%*?&).",
       },
     },
     profilePicture: {
@@ -29,8 +25,8 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "moderator", "member"],
-      default: "member",
+      enum: Object.values(ROLES),
+      default: ROLES.MEMBER,
     },
     isProfilePublic: {
       type: Boolean,
@@ -38,11 +34,15 @@ const UserSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, // Automatically adds `createdAt` and `updatedAt`
+    timestamps: true,
   }
 );
 
-// Hash password before saving
+UserSchema.index(
+  { username: 1 },
+  { collation: { locale: "en", strength: 2 }, name: "username_ci" }
+);
+
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
@@ -50,7 +50,6 @@ UserSchema.pre("save", async function (next) {
   next();
 });
 
-// Compare password
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };

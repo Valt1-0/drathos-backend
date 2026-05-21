@@ -5,11 +5,13 @@ import fs from "fs";
 import Mod from "../models/modModel.js";
 import InstalledMod from "../models/installedModModel.js";
 import { fileURLToPath } from "url";
+import { getSettings } from "../utils/serverSettings.js";
 
 import {
   sanitizePath,
   validateFileName,
   validateFileAccess,
+  validateMagicBytes,
   cleanFileName,
 } from "../utils/pathValidator.js";
 
@@ -24,22 +26,42 @@ if (!fs.existsSync(MOD_FILES_DIR)) {
   fs.mkdirSync(MOD_FILES_DIR, { recursive: true });
 }
 
-// Dossier temporaire pour les uploads
 const TEMP_UPLOAD_DIR = path.join(MOD_FILES_DIR, "temp");
 if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 }
 
+const cleanupTempFiles = () => {
+  try {
+    const now = Date.now();
+    const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    for (const file of fs.readdirSync(TEMP_UPLOAD_DIR)) {
+      const filePath = path.join(TEMP_UPLOAD_DIR, file);
+      try {
+        if (now - fs.statSync(filePath).mtimeMs > MAX_AGE_MS) {
+          fs.unlinkSync(filePath);
+          logger.info("[cleanupTempFiles] Removed:", file);
+        }
+      } catch {}
+    }
+  } catch (err) {
+    logger.warn("[cleanupTempFiles] Error:", err.message);
+  }
+};
+
+cleanupTempFiles();
+setInterval(cleanupTempFiles, 6 * 60 * 60 * 1000).unref();
+
 const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"];
 
-// Utiliser diskStorage pour éviter de charger les gros fichiers en RAM
+// diskStorage streams directly to disk — avoids loading large files into RAM
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, TEMP_UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    // Nom temporaire unique pour éviter les collisions
-    cb(null, `upload-${Date.now()}-${file.originalname}`);
+    const ext = path.extname(file.originalname).replace(/[^a-z0-9.]/gi, "").toLowerCase();
+    cb(null, `upload-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
   },
 });
 
@@ -47,12 +69,10 @@ const fileFilter = (req, file, cb) => {
   const fileName = file.originalname.toLowerCase();
   const ext = path.extname(fileName);
 
-  // Check for .tar.gz
   if (fileName.endsWith(".tar.gz") || fileName.endsWith(".tgz")) {
     return cb(null, true);
   }
 
-  // Check other extensions
   if (!allowedExtensions.includes(ext)) {
     return cb(
       new Error("Only .zip, .7z, .rar, .tar, .tar.gz, .tgz files are allowed."),
@@ -62,16 +82,16 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2 GB max
-  },
-}).single("modFile");
+export const uploadMod = async (req, res) => {
+  const settings = await getSettings();
+  const fileSizeLimit = settings.maxModSizeGB * 1024 * 1024 * 1024;
 
-// Upload d'un mod (admin only)
-export const uploadMod = (req, res) => {
+  const upload = multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: fileSizeLimit },
+  }).single("modFile");
+
   upload(req, res, async (err) => {
     if (err) {
       logger.error("[uploadMod] Error:", err.message);
@@ -102,27 +122,22 @@ export const uploadMod = (req, res) => {
     try {
       const originalName = path.parse(req.file.originalname).name;
       const extension = path.extname(req.file.originalname).toLowerCase();
+
+      if (!validateMagicBytes(req.file.path, extension)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({
+          error: true,
+          message: "Invalid file content (magic bytes mismatch).",
+        });
+      }
+
       const cleanName = cleanFileName(originalName);
       const filename = `${cleanName}${extension}`;
 
       validateFileName(filename);
       const safePath = sanitizePath(MOD_FILES_DIR, filename);
 
-      // Atomic check+create via exclusive open (évite la race condition TOCTOU)
-      try {
-        const fd = fs.openSync(safePath, "wx");
-        fs.closeSync(fd);
-      } catch (e) {
-        if (e.code === "EEXIST") {
-          fs.unlinkSync(req.file.path);
-          return res.status(400).json({
-            error: true,
-            message: "Un fichier avec ce nom existe déjà",
-          });
-        }
-        throw e;
-      }
-
+      if (fs.existsSync(safePath)) fs.unlinkSync(safePath);
       fs.renameSync(req.file.path, safePath);
 
       let platforms = ["win32", "linux", "darwin"];
@@ -173,13 +188,12 @@ export const uploadMod = (req, res) => {
       res.status(500).json({
         error: true,
         message: "Server error",
-        details: error.message,
+        ...(process.env.NODE_ENV !== "production" && { details: error.message }),
       });
     }
   });
 };
 
-// Récupérer les mods pour un jeu spécifique
 export const getModsByGame = async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -194,21 +208,17 @@ export const getModsByGame = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.status(200).json({
-      error: false,
-      mods,
-    });
+    return res.status(200).json({ error: false, mods });
   } catch (error) {
     logger.error("[getModsByGame] Error:", error.message);
     return res.status(500).json({
       error: true,
       message: "Error fetching mods.",
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
 
-// Récupérer un mod par son ID
 export const getModById = async (req, res) => {
   try {
     const mod = await Mod.findById(req.params.modId).lean();
@@ -223,12 +233,11 @@ export const getModById = async (req, res) => {
     return res.status(500).json({
       error: true,
       message: "Error fetching mod.",
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
 
-// Télécharger un mod
 export const downloadMod = async (req, res) => {
   try {
     const mod = await Mod.findById(req.params.modId);
@@ -245,11 +254,9 @@ export const downloadMod = async (req, res) => {
 
     const fileSize = fs.statSync(safePath).size;
 
-    // Incrémenter le compteur de téléchargements
     mod.downloads += 1;
     await mod.save();
 
-    // Headers pour le téléchargement
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader(
       "Content-Disposition",
@@ -261,11 +268,15 @@ export const downloadMod = async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
 
     const fileStream = fs.createReadStream(safePath, {
-      highWaterMark: 2 * 1024 * 1024, // 2 MB chunks
+      highWaterMark: 2 * 1024 * 1024,
     });
+
+    // Destroy the read stream if the client disconnects mid-download
+    res.on("close", () => fileStream.destroy());
 
     fileStream.on("error", (err) => {
       logger.error("[downloadMod] Stream error:", err);
+      fileStream.destroy();
       if (!res.headersSent) {
         res.status(500).json({ error: true, message: "Error streaming file." });
       }
@@ -279,35 +290,39 @@ export const downloadMod = async (req, res) => {
       res.status(500).json({
         error: true,
         message: "Error downloading mod.",
-        details: error.message,
+        ...(process.env.NODE_ENV !== "production" && { details: error.message }),
       });
     }
   }
 };
 
-// Récupérer les mods installés par l'utilisateur
 export const getInstalledMods = async (req, res) => {
   try {
-    const installedMods = await InstalledMod.find({ userId: req.user.id })
-      .populate("modId")
-      .populate("gameId")
-      .lean();
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip  = (page - 1) * limit;
 
-    res.status(200).json({
-      error: false,
-      installedMods,
-    });
+    const [installedMods, total] = await Promise.all([
+      InstalledMod.find({ userId: req.user.id })
+        .populate("modId")
+        .populate("gameId")
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      InstalledMod.countDocuments({ userId: req.user.id }),
+    ]);
+
+    res.status(200).json({ error: false, installedMods, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     logger.error("[getInstalledMods] Error:", error.message);
     res.status(500).json({
       error: true,
       message: "Error fetching installed mods.",
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
 
-// Marquer un mod comme installé
 export const markAsInstalled = async (req, res) => {
   try {
     const { modId, gameId } = req.body;
@@ -319,16 +334,11 @@ export const markAsInstalled = async (req, res) => {
       });
     }
 
-    // Vérifier si le mod existe
     const mod = await Mod.findById(modId).lean();
     if (!mod) {
-      return res.status(404).json({
-        error: true,
-        message: "Mod not found.",
-      });
+      return res.status(404).json({ error: true, message: "Mod not found." });
     }
 
-    // Vérifier si déjà installé
     const existing = await InstalledMod.findOne({
       userId: req.user.id,
       modId,
@@ -359,12 +369,11 @@ export const markAsInstalled = async (req, res) => {
     res.status(500).json({
       error: true,
       message: "Error marking mod as installed.",
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
 
-// Désinstaller un mod
 export const uninstallMod = async (req, res) => {
   try {
     const result = await InstalledMod.deleteOne({
@@ -379,37 +388,24 @@ export const uninstallMod = async (req, res) => {
       });
     }
 
-    res.status(200).json({
-      error: false,
-      message: "Mod uninstalled successfully.",
-    });
+    res.status(200).json({ error: false, message: "Mod uninstalled successfully." });
   } catch (error) {
     logger.error("[uninstallMod] Error:", error.message);
     res.status(500).json({
       error: true,
       message: "Error uninstalling mod.",
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
 
-// Supprimer un mod (admin only)
 export const deleteMod = async (req, res) => {
   try {
     const modId = req.params.modId;
     const adminId = req.user.id;
 
-    logger.info(
-      "[deleteMod] Début suppression - ID:",
-      modId,
-      "Admin:",
-      adminId,
-    );
-
-    // Vérifier l'existence du mod
     const mod = await Mod.findById(modId);
     if (!mod) {
-      logger.error("[deleteMod] Mod non trouvé - ID:", modId);
       return res.status(404).json({
         error: true,
         message: "Mod not found.",
@@ -417,17 +413,8 @@ export const deleteMod = async (req, res) => {
       });
     }
 
-    logger.info("[deleteMod] Mod trouvé:", mod.name);
-
-    // Vérifier les installations actives
-    const activeInstallations = await InstalledMod.countDocuments({
-      modId: modId,
-    });
-
+    const activeInstallations = await InstalledMod.countDocuments({ modId });
     if (activeInstallations > 0) {
-      logger.error(
-        `[deleteMod] ${activeInstallations} installation(s) active(s)`,
-      );
       return res.status(409).json({
         error: true,
         message: `Cannot delete mod with ${activeInstallations} active installation(s).`,
@@ -436,41 +423,41 @@ export const deleteMod = async (req, res) => {
       });
     }
 
-    logger.info("[deleteMod] Aucune installation active");
+    // Validate path before touching the DB — abort early on path traversal attempt
+    let safePath = null;
+    if (mod.zipFilePath) {
+      try {
+        safePath = sanitizePath(MOD_FILES_DIR, mod.zipFilePath);
+      } catch (pathError) {
+        logger.error("[deleteMod] Invalid path:", pathError.message);
+        return res.status(403).json({
+          error: true,
+          message: "Invalid file path.",
+          code: "INVALID_FILE_PATH",
+        });
+      }
+    }
 
-    // Supprimer les enregistrements InstalledMod
     const deletedInstalled = await InstalledMod.deleteMany({ modId });
-    logger.info(
-      `[deleteMod] ${deletedInstalled.deletedCount} enregistrements supprimés`,
-    );
-
-    // Supprimer le mod de la base de données
     await Mod.findByIdAndDelete(modId);
-    logger.info("[deleteMod] Mod supprimé de la BD");
 
-    // Supprimer le fichier physique
+    // Best-effort file deletion — DB is already clean at this point
     let fileDeletedSuccessfully = false;
     let fileErrorDetails = null;
 
-    try {
-      const safePath = validateFileAccess(mod.zipFilePath, MOD_FILES_DIR);
-      if (fs.existsSync(safePath)) {
-        fs.unlinkSync(safePath);
-        fileDeletedSuccessfully = true;
-        logger.info("[deleteMod] Fichier supprimé:", safePath);
-      } else {
-        fileErrorDetails = "FILE_NOT_FOUND";
-        logger.warn("[deleteMod] Fichier introuvable:", safePath);
+    if (safePath) {
+      try {
+        if (fs.existsSync(safePath)) {
+          fs.unlinkSync(safePath);
+          fileDeletedSuccessfully = true;
+        } else {
+          fileErrorDetails = "FILE_NOT_FOUND";
+        }
+      } catch (fileError) {
+        fileErrorDetails = fileError.message;
+        logger.error("[deleteMod] File deletion failed:", fileError.message);
       }
-    } catch (fileError) {
-      fileErrorDetails = fileError.message;
-      logger.error(
-        "[deleteMod] Erreur suppression fichier:",
-        fileError.message,
-      );
     }
-
-    logger.info("[deleteMod] Suppression complétée");
 
     res.status(200).json({
       error: false,
@@ -491,7 +478,7 @@ export const deleteMod = async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error("[deleteMod] Erreur:", error.message);
+    logger.error("[deleteMod] Error:", error.message);
 
     let statusCode = 500;
     let errorCode = "DELETE_FAILED";
@@ -511,7 +498,7 @@ export const deleteMod = async (req, res) => {
       error: true,
       message: "Error deleting mod.",
       code: errorCode,
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };

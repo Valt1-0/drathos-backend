@@ -1,5 +1,7 @@
 import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
+import { revokeToken } from "../middlewares/authMiddleware.js";
+import { ROLES, JWT_EXPIRES_IN, MAX_PROFILE_PIC_SIZE } from "../utils/constants.js";
 import User from "../models/userModel.js";
 import InstalledGame from "../models/installedGameModel.js";
 import multer from "multer";
@@ -11,13 +13,10 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ==================== CONSTANTS ====================
 const JWT_TOKEN = process.env.JWT_TOKEN;
-const JWT_EXPIRES_IN = "30d";
 const UPLOAD_DIR = path.join(__dirname, "../../serverData/users");
 const PROFILE_URL_PREFIX = "/serverData/users/";
 const DEFAULT_PROFILE_PICTURE = null;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -25,12 +24,9 @@ const ALLOWED_MIME_TYPES = [
   "image/webp",
 ];
 
-// Ensure upload directory exists
 if (!existsSync(UPLOAD_DIR)) {
   mkdirSync(UPLOAD_DIR, { recursive: true });
 }
-
-// ==================== HELPERS ====================
 
 const signToken = (user) => {
   return new Promise((resolve, reject) => {
@@ -113,8 +109,6 @@ const getBulkUserStats = async (userIds) => {
   return new Map(stats.map((s) => [s._id.toString(), s]));
 };
 
-// ==================== MULTER CONFIG ====================
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
@@ -130,10 +124,8 @@ const fileFilter = (req, file, cb) => {
 export const uploadMiddleware = multer({
   storage,
   fileFilter,
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: { fileSize: MAX_PROFILE_PIC_SIZE },
 }).single("profilePicture");
-
-// ==================== AUTH ====================
 
 export const register = async (req, res) => {
   const { username, password } = req.body;
@@ -179,31 +171,34 @@ export const login = async (req, res) => {
   }
 };
 
-// ==================== PROFILES ====================
-
 export const getAllUsers = async (req, res) => {
   try {
     const { search = "", page = 1, limit = 20 } = req.query;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
+
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const safeSearch = search.trim().substring(0, 50);
 
     const query = {
       isProfilePublic: { $ne: false },
-      ...(search && { username: { $regex: search, $options: "i" } }),
+      ...(safeSearch && { username: { $regex: escapeRegex(safeSearch), $options: "i" } }),
     };
+
+    const collation = { locale: "en", strength: 2 };
 
     const [users, total] = await Promise.all([
       User.find(query)
+        .collation(collation)
         .select("_id username profilePicture role createdAt")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      User.countDocuments(query),
+      User.countDocuments(query).collation(collation),
     ]);
 
-    // Single aggregation for all users' stats
     const statsMap = await getBulkUserStats(users.map((u) => u._id));
 
     const usersWithStats = users.map((user) => {
@@ -320,7 +315,6 @@ export const uploadProfilePicture = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Delete old picture
     await deleteProfileFile(user.profilePicture);
 
     const profilePicture = `${PROFILE_URL_PREFIX}${req.file.filename}`;
@@ -369,9 +363,7 @@ export const deleteProfilePicture = async (req, res) => {
   }
 };
 
-// ==================== ADMIN ====================
-
-const VALID_ROLES = ["admin", "moderator", "member"];
+const VALID_ROLES = Object.values(ROLES);
 
 export const updateUserRole = async (req, res) => {
   try {
@@ -384,7 +376,6 @@ export const updateUserRole = async (req, res) => {
       });
     }
 
-    // Prevent self-demotion
     if (req.user.id === userId) {
       return res.status(400).json({
         message: "You cannot change your own role",
@@ -396,17 +387,20 @@ export const updateUserRole = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (role === "admin") {
+    if (role === ROLES.ADMIN) {
       return res
         .status(403)
         .json({ message: "The admin role cannot be assigned" });
     }
 
-    if (user.role === "admin") {
+    if (user.role === ROLES.ADMIN) {
       return res.status(403).json({ message: "Cannot change an admin's role" });
     }
 
+    const previousRole = user.role;
     await User.updateOne({ _id: userId }, { role });
+
+    logger.info(`[audit] role_change by=${req.user.username}(${req.user.id}) target=${user.username}(${userId}) ${previousRole} → ${role}`);
 
     res.json({
       message: `User ${user.username} role updated to ${role}`,
@@ -415,5 +409,18 @@ export const updateUserRole = async (req, res) => {
   } catch (error) {
     logger.error("[userController] updateUserRole error:", error);
     res.status(500).json({ message: "Server error while updating user role" });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+    if (token) {
+      revokeToken(token);
+    }
+    res.status(200).json({ message: "Logged out successfully." });
+  } catch (error) {
+    logger.error("[logout] Error:", error.message);
+    res.status(500).json({ message: "Server error during logout." });
   }
 };

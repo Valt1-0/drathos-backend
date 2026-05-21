@@ -21,25 +21,22 @@ const CollectionSchema = new mongoose.Schema({
     default: ""
   },
 
-  // Type de collection
   type: {
     type: String,
     enum: ["custom", "smart"],
     default: "custom"
   },
 
-  // Pour les collections intelligentes ("smart")
   smartFilter: {
     type: {
       type: String,
       enum: ["recentlyPlayed", "installed", "notInstalled", "favorites", "mostPlayed"],
     },
     params: {
-      type: mongoose.Schema.Types.Mixed, // Paramètres flexibles
+      type: mongoose.Schema.Types.Mixed,
     }
   },
 
-  // Liste des jeux (pour collections custom uniquement)
   games: [{
     serverGameId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -52,22 +49,20 @@ const CollectionSchema = new mongoose.Schema({
     },
     order: {
       type: Number,
-      default: 0 // Pour le drag & drop
+      default: 0
     }
   }],
 
-  // Métadonnées visuelles
   icon: {
     type: String,
-    default: "FaFolder" // Icône React Icons
+    default: "FaFolder"
   },
 
   color: {
     type: String,
-    default: "#6366f1" // Couleur hex
+    default: "#6366f1"
   },
 
-  // Visibilité
   isPublic: {
     type: Boolean,
     default: false
@@ -91,12 +86,10 @@ const CollectionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index composés pour performance
 CollectionSchema.index({ userId: 1, name: 1 }, { unique: true });
 CollectionSchema.index({ userId: 1, isPinned: -1, createdAt: -1 });
 CollectionSchema.index({ "games.serverGameId": 1 });
 
-// Méthode pour ajouter un jeu
 CollectionSchema.methods.addGame = function(gameId) {
   const exists = this.games.find(g => g.serverGameId.toString() === gameId.toString());
   if (!exists) {
@@ -108,12 +101,10 @@ CollectionSchema.methods.addGame = function(gameId) {
   }
 };
 
-// Méthode pour retirer un jeu
 CollectionSchema.methods.removeGame = function(gameId) {
   this.games = this.games.filter(g => g.serverGameId.toString() !== gameId.toString());
 };
 
-// Méthode pour réorganiser les jeux
 CollectionSchema.methods.reorderGames = function(gameOrders) {
   gameOrders.forEach(({ gameId, order }) => {
     const game = this.games.find(g => g.serverGameId.toString() === gameId.toString());
@@ -121,7 +112,6 @@ CollectionSchema.methods.reorderGames = function(gameOrders) {
       game.order = order;
     }
   });
-  // Trier par ordre
   this.games.sort((a, b) => a.order - b.order);
 };
 

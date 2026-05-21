@@ -27,14 +27,12 @@ export const corsConfig = cors({
       return callback(null, true);
     }
 
-    if (!strictMode) {
-      if (
-        origin === "null" ||
-        origin.startsWith("file://") ||
-        origin.startsWith("app://")
-      ) {
-        return callback(null, true);
-      }
+    if (
+      origin === "null" ||
+      origin.startsWith("file://") ||
+      origin.startsWith("app://")
+    ) {
+      return callback(null, true);
     }
 
     if (process.env.NODE_ENV !== "production") {
@@ -57,7 +55,7 @@ export const corsConfig = cors({
       return callback(new Error("Not allowed by CORS"));
     }
 
-    callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   optionsSuccessStatus: 200,

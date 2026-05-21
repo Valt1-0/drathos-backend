@@ -1,5 +1,3 @@
-// drathos-backend/src/models/installedGameModel.js
-
 import mongoose from "mongoose";
 
 const installedGameSchema = new mongoose.Schema(
@@ -25,7 +23,7 @@ const installedGameSchema = new mongoose.Schema(
     stats: {
       totalPlayTime: {
         type: Number,
-        default: 0, // en secondes
+        default: 0,
       },
       totalSessions: {
         type: Number,
@@ -39,7 +37,6 @@ const installedGameSchema = new mongoose.Schema(
         type: Number,
         default: null,
       },
-      // Session en cours
       currentSession: {
         startTime: {
           type: Number,
@@ -50,7 +47,6 @@ const installedGameSchema = new mongoose.Schema(
           default: false,
         },
       },
-      // Achievements/Statistics
       achievements: [
         {
           name: String,
@@ -60,16 +56,15 @@ const installedGameSchema = new mongoose.Schema(
       ],
       customStats: {
         type: Map,
-        of: mongoose.Schema.Types.Mixed, // Stats personnalisées par jeu
+        of: mongoose.Schema.Types.Mixed,
       },
     },
-    // Installation info
     installedAt: {
       type: Date,
       default: Date.now,
     },
     installSize: {
-      type: Number, // en MB
+      type: Number,
       default: 0,
     },
     lastUpdated: {
@@ -82,7 +77,6 @@ const installedGameSchema = new mongoose.Schema(
   }
 );
 
-// Index pour les requêtes rapides
 installedGameSchema.index({ userId: 1, serverGameId: 1 }, { unique: true });
 installedGameSchema.index({ "stats.lastPlayed": -1 });
 installedGameSchema.index({ "stats.totalPlayTime": -1 });

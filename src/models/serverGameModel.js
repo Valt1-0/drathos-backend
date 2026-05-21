@@ -12,14 +12,14 @@ const ServerGameSchema = new mongoose.Schema({
     },
   ],
   releaseDate: { type: Date },
-  platforms: { type: [String] }, // noms, pas juste les IDs
-  rating: { type: Number }, // IGDB user rating
-  aggregatedRating: { type: Number }, // critic + user
-  coverUrl: { type: String }, // URL vers image IGDB
+  platforms: { type: [String] },
+  rating: { type: Number },
+  aggregatedRating: { type: Number },
+  coverUrl: { type: String },
   igdbId: { type: Number, required: true },
 
-  developer: { type: String }, // Nom du développeur
-  publisher: { type: String }, // Nom de l'éditeur
+  developer: { type: String },
+  publisher: { type: String },
 
   zipFileName: { type: String, required: true },
   zipFilePath: { type: String, required: true },
@@ -32,12 +32,11 @@ const ServerGameSchema = new mongoose.Schema({
     maxPlayers: { type: Number, min: 1, max: 999, default: null },
     modes: [{ type: String, enum: ['co-op', 'pvp'] }]
   },
-  executableName: { type: String }, // Nom de l'exécutable à lancer (ex: "game.exe", "bin/server.exe")
+  executableName: { type: String },
 
   addedAt: { type: Date, default: Date.now },
 });
 
-// Index composite unique pour permettre plusieurs versions du même jeu
 ServerGameSchema.index({ igdbId: 1, version: 1 }, { unique: true });
 
 export default mongoose.model("ServerGame", ServerGameSchema);

@@ -28,13 +28,10 @@ const ModSchema = new mongoose.Schema({
   isPublic: { type: Boolean, default: true },
   downloads: { type: Number, default: 0 },
 }, {
-  timestamps: true // Ajoute automatiquement createdAt et updatedAt
+  timestamps: true
 });
 
-// Index composite unique pour permettre plusieurs versions du même mod pour un jeu
 ModSchema.index({ gameId: 1, name: 1, version: 1 }, { unique: true });
-
-// Index pour rechercher les mods par jeu rapidement
 ModSchema.index({ gameId: 1 });
 
 export default mongoose.model("Mod", ModSchema);

@@ -1,6 +1,6 @@
 import { body, param, validationResult } from "express-validator";
+import { ROLES, PASSWORD_REGEX, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "../utils/constants.js";
 
-// Middleware pour gérer les erreurs de validation
 export const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -13,7 +13,6 @@ export const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// Validations pour l'authentification
 export const validateRegister = [
   body("username")
     .trim()
@@ -25,12 +24,10 @@ export const validateRegister = [
     ),
 
   body("password")
-    .isLength({ min: 8, max: 128 })
-    .withMessage("Le mot de passe doit contenir entre 8 et 128 caractères")
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/)
-    .withMessage(
-      "Le mot de passe doit contenir au moins une minuscule, une majuscule, un chiffre et un caractère spécial (@$!%*?&)"
-    ),
+    .isLength({ min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH })
+    .withMessage(`Le mot de passe doit contenir entre ${PASSWORD_MIN_LENGTH} et ${PASSWORD_MAX_LENGTH} caractères`)
+    .matches(PASSWORD_REGEX)
+    .withMessage("Le mot de passe doit contenir au moins une minuscule, une majuscule, un chiffre et un caractère spécial (@$!%*?&)"),
 
   handleValidationErrors,
 ];
@@ -52,7 +49,6 @@ export const validateLogin = [
   handleValidationErrors,
 ];
 
-// Validations pour les jeux
 export const validateAddGame = [
   body("title")
     .optional()
@@ -77,7 +73,6 @@ export const validateAddGame = [
     .isBoolean()
     .withMessage("isPublic doit être un booléen"),
 
-  // Nouveau format multiplayer (objet)
   body("multiplayer.enabled")
     .optional()
     .isBoolean()
@@ -129,26 +124,23 @@ export const validateUpdateGame = [
   handleValidationErrors,
 ];
 
-// Validation ID MongoDB générique
 export const validateObjectId = [
   param("id").isMongoId().withMessage("ID invalide"),
   handleValidationErrors,
 ];
 
-// Validation userId MongoDB
 export const validateUserId = [
   param("userId").isMongoId().withMessage("User ID invalide"),
   handleValidationErrors,
 ];
 
-// Validation role update
 export const validateRoleUpdate = [
   param("userId").isMongoId().withMessage("User ID invalide"),
   body("role")
     .trim()
     .notEmpty()
     .withMessage("Role requis")
-    .isIn(["admin", "moderator", "member"])
-    .withMessage("Role invalide. Doit être: admin, moderator, ou member"),
+    .isIn(Object.values(ROLES))
+    .withMessage(`Role invalide. Doit être: ${Object.values(ROLES).join(", ")}`),
   handleValidationErrors,
 ];

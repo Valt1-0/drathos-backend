@@ -1,18 +1,22 @@
-// drathos-backend/src/controllers/installedGameController.js
-
 import logger from "../utils/logger.js";
 import InstalledGame from "../models/installedGameModel.js";
+import mongoose from "mongoose";
 
-// Ajouter un jeu installé
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
 export const addInstalledGame = async (req, res) => {
   try {
-    const { userId, serverGameId, path, version, installSize } = req.body;
+    const userId = req.user.id;
+    const { serverGameId, path, version, installSize } = req.body;
 
-    if (!userId || !serverGameId || !path) {
+    if (!serverGameId || !path) {
       return res.status(400).json({ message: "Champs requis manquants." });
     }
 
-    // Vérifie si le jeu est déjà installé pour ce user
+    if (!isValidObjectId(serverGameId)) {
+      return res.status(400).json({ message: "serverGameId invalide." });
+    }
+
     const existing = await InstalledGame.findOne({ userId, serverGameId });
     if (existing) {
       return res
@@ -25,7 +29,6 @@ export const addInstalledGame = async (req, res) => {
       serverGameId,
       path,
       version,
-      // Initialiser les stats de base
       stats: {
         totalPlayTime: 0,
         totalSessions: 0,
@@ -52,7 +55,6 @@ export const addInstalledGame = async (req, res) => {
   }
 };
 
-// Récupérer les jeux installés pour un utilisateur
 export const getInstalledGames = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -85,7 +87,6 @@ export const getInstalledGames = async (req, res) => {
   }
 };
 
-// Lancer un jeu
 export const launchGame = async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -100,13 +101,10 @@ export const launchGame = async (req, res) => {
       return res.status(404).json({ message: "Jeu non installé" });
     }
 
-    // Marquer la session comme active
     installedGame.stats.currentSession.startTime = Date.now();
     installedGame.stats.currentSession.isPlaying = true;
 
-    // Note : totalSessions sera incrémenté lors de la synchronisation finale (sync-stats)
-    // pour éviter le double comptage entre local et remote
-
+    // totalSessions is incremented on sync-stats to avoid double-counting between local and remote
     if (!installedGame.stats.firstLaunched) {
       installedGame.stats.firstLaunched = Date.now();
     }
@@ -124,7 +122,6 @@ export const launchGame = async (req, res) => {
   }
 };
 
-// Arrêter un jeu
 export const stopGame = async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -139,11 +136,9 @@ export const stopGame = async (req, res) => {
       return res.status(404).json({ message: "Aucune session active" });
     }
 
-    // Calculer la durée de la session
     const sessionStart = installedGame.stats.currentSession.startTime;
     const sessionDuration = Math.floor((Date.now() - sessionStart) / 1000);
 
-    // Mettre à jour les statistiques
     installedGame.stats.totalPlayTime += sessionDuration;
     installedGame.stats.lastPlayed = Date.now();
     installedGame.stats.currentSession.isPlaying = false;
@@ -162,7 +157,6 @@ export const stopGame = async (req, res) => {
   }
 };
 
-// Obtenir les stats d'un jeu installé
 export const getGameStats = async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -217,17 +211,17 @@ export const getGameStats = async (req, res) => {
   }
 };
 
-/**
- * 🔄 Synchronise les statistiques du client vers le serveur
- * Cette méthode effectue un merge intelligent des stats local/remote
- */
 export const syncGameStats = async (req, res) => {
   try {
     const { gameId } = req.params;
     const userId = req.user.id;
     const { totalPlayTime, totalSessions, lastPlayed, firstLaunched, sessionDuration } = req.body;
 
-    // Trouver le jeu installé
+    const toSafeInt = (val, fallback = 0) => {
+      const n = Number(val);
+      return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+    };
+
     const installedGame = await InstalledGame.findOne({
       userId,
       serverGameId: gameId,
@@ -237,19 +231,16 @@ export const syncGameStats = async (req, res) => {
       return res.status(404).json({ message: "Jeu non installé" });
     }
 
-    // MERGE INTELLIGENT : Prendre les valeurs maximales (les plus à jour)
     const oldTotalPlayTime = installedGame.stats.totalPlayTime || 0;
     const oldTotalSessions = installedGame.stats.totalSessions || 0;
     const oldLastPlayed = installedGame.stats.lastPlayed ? new Date(installedGame.stats.lastPlayed).getTime() : 0;
     const oldFirstLaunched = installedGame.stats.firstLaunched ? new Date(installedGame.stats.firstLaunched).getTime() : Date.now();
 
-    // Utiliser les valeurs maximales pour éviter les conflits
-    installedGame.stats.totalPlayTime = Math.max(oldTotalPlayTime, totalPlayTime || 0);
-    installedGame.stats.totalSessions = Math.max(oldTotalSessions, totalSessions || 0);
-    installedGame.stats.lastPlayed = Math.max(oldLastPlayed, lastPlayed || 0);
-    installedGame.stats.firstLaunched = Math.min(oldFirstLaunched, firstLaunched || Date.now());
+    installedGame.stats.totalPlayTime = Math.max(oldTotalPlayTime, toSafeInt(totalPlayTime));
+    installedGame.stats.totalSessions = Math.max(oldTotalSessions, toSafeInt(totalSessions));
+    installedGame.stats.lastPlayed = Math.max(oldLastPlayed, toSafeInt(lastPlayed));
+    installedGame.stats.firstLaunched = Math.min(oldFirstLaunched, toSafeInt(firstLaunched, Date.now()));
 
-    // Réinitialiser la session actuelle (le jeu est fermé)
     installedGame.stats.currentSession.isPlaying = false;
     installedGame.stats.currentSession.startTime = null;
 
@@ -271,18 +262,14 @@ export const syncGameStats = async (req, res) => {
   }
 };
 
-/**
- * 🗑️ Supprime un jeu installé de la base de données
- */
 export const removeInstalledGame = async (req, res) => {
   try {
-    const userId = req.user.id; // Récupéré depuis le middleware auth
+    const userId = req.user.id;
     const { gameId } = req.params;
-    if (!gameId) {
-      return res.status(400).json({ message: "gameId requis" });
+    if (!gameId || !isValidObjectId(gameId)) {
+      return res.status(400).json({ message: "gameId invalide." });
     }
 
-    // Trouver et supprimer le jeu installé
     const result = await InstalledGame.findOneAndDelete({
       userId,
       serverGameId: gameId,
@@ -324,10 +311,6 @@ function formatPlayTime(seconds) {
   }
 }
 
-/**
- * 🧹 Nettoie toutes les sessions bloquées au démarrage du serveur
- * (sessions marquées comme "en cours" mais le serveur a redémarré)
- */
 export const cleanupStuckSessions = async () => {
   try {
     logger.info("[Cleanup] Vérification des sessions bloquées...");
@@ -362,7 +345,6 @@ export const cleanupStuckSessions = async () => {
 };
 
 function formatRelativeTime(date) {
-  // Convertir la date UTC en timestamp local
   const localDate = new Date(date);
   const seconds = Math.floor((Date.now() - localDate.getTime()) / 1000);
 
@@ -377,10 +359,8 @@ function formatRelativeTime(date) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  // Pour les dates plus anciennes, afficher avec le fuseau horaire local
   const isCurrentYear = localDate.getFullYear() === new Date().getFullYear();
 
-  // Utiliser toLocaleDateString qui gère automatiquement le fuseau horaire
   return localDate.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",

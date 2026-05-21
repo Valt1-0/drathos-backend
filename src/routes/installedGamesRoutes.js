@@ -1,5 +1,3 @@
-// drathos-backend/src/routes/installedGamesRoutes.js
-
 import express from "express";
 import {
   getInstalledGames,
@@ -14,15 +12,13 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Routes existantes
 router.get("/getInstalledGames", authMiddleware, getInstalledGames);
 router.post("/addInstalledGame", authMiddleware, addInstalledGame);
 router.delete("/removeInstalledGame/:gameId", authMiddleware, removeInstalledGame);
 
-// Nouvelles routes pour le tracking
 router.post("/launch/:gameId", authMiddleware, launchGame);
 router.post("/stop/:gameId", authMiddleware, stopGame);
 router.get("/stats/:gameId", authMiddleware, getGameStats);
-router.post("/sync-stats/:gameId", authMiddleware, syncGameStats); // 🔄 Nouvelle route pour sync bidirectionnelle
+router.post("/sync-stats/:gameId", authMiddleware, syncGameStats);
 
 export default router;

@@ -7,18 +7,26 @@ services:
     restart: unless-stopped
     environment:
       - API_PORT=5001
-      - MONGODB_URI=mongodb://mongodb:27017/drathos
-      - JWT_TOKEN=hide_this
-      - CORS_STRICT_MODE=false
-      - CORS_ALLOWED_ORIGINS=*
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME required}:${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}@mongodb:27017/drathos?authSource=admin
+      - JWT_TOKEN=${JWT_TOKEN:?JWT_TOKEN required}
+      - CORS_STRICT_MODE=${CORS_STRICT_MODE:-true}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS required}
       - GAME_FILES_DIR=/usr/src/app/serverData/serverGames
       - MOD_FILES_DIR=/usr/src/app/serverData/serverMods
-      - TWITCH_CLIENT_ID=YOUR_TWITCH_CLIENT_ID
-      - TWITCH_CLIENT_SECRET=YOUR_TWITCH_CLIENT_SECRET
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:?TWITCH_CLIENT_ID required}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET:?TWITCH_CLIENT_SECRET required}
     ports:
       - "8080:5001"
     volumes:
       - server-data:/usr/src/app/serverData
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       mongodb:
         condition: service_healthy
@@ -47,12 +55,24 @@ services:
     container_name: drathos-db
     image: mongo:4
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME required}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}
+      - MONGO_INITDB_DATABASE=drathos
     volumes:
       - mongo-data:/data/db
     networks:
       - drathos_network
     healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongo", "-u", "${MONGO_ROOT_USERNAME}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
