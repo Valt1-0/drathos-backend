@@ -1,45 +1,54 @@
-# Drathos Backend
+<div align="center">
+  <br />
+  <img src="https://raw.githubusercontent.com/Valt1-0/drathos/main/resources/icon.png" alt="Drathos" width="100" />
+  <h1>Drathos Backend</h1>
+  <p><strong>Self-Hosted Game Library Server</strong></p>
+  <p>Self-hosted · Open Source · REST API + WebSocket</p>
 
-> Self-hosted game library server — manage, distribute, and track your games across your local network.
+  <p>
+    <img src="https://img.shields.io/badge/version-1.0.0-3B82F6?style=flat-square" />
+    <img src="https://img.shields.io/badge/node-22-339933?style=flat-square&logo=node.js&logoColor=white" />
+    <img src="https://img.shields.io/badge/docker-valt1n%2Fdrathos--backend-2496ED?style=flat-square&logo=docker&logoColor=white" />
+    <img src="https://img.shields.io/badge/license-GPL--3.0-22C55E?style=flat-square" />
+  </p>
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Valt1-0/drathos-backend)
-[![Docker](https://img.shields.io/badge/docker-valt1n%2Fdrathos--backend-blue?logo=docker)](https://hub.docker.com/r/valt1n/drathos-backend)
-[![Node](https://img.shields.io/badge/node-22-green?logo=node.js)](https://nodejs.org)
-[![License](https://img.shields.io/badge/license-GPL--3.0-22C55E)](LICENSE)
+  <p>
+    <img src="https://skillicons.dev/icons?i=nodejs,express,mongodb,docker" height="36" />
+  </p>
+
+  <br />
+</div>
+
+<div align="center">
+
+[Features](#features) · [Stack](#tech-stack) · [Getting Started](#getting-started) · [Client](https://github.com/Valt1-0/drathos)
+
+</div>
+
+<br />
 
 ---
 
-## Overview
+## What is Drathos Backend?
 
-Drathos Backend is the REST API + WebSocket server powering the Drathos gaming platform. It is designed to be self-hosted on a local network or home server, acting as a central hub for your game library.
+Drathos Backend is the **REST API + WebSocket server** powering the Drathos gaming platform. It is designed to be self-hosted on a local network or home server, acting as a central hub for your DRM-free game library — storing games, tracking playtime, managing users, and broadcasting real-time events to connected clients.
+
+<br />
 
 ---
 
 ## Features
 
-### Game Library
+<table>
+<tr><td><img src="https://api.iconify.design/lucide/library.svg?color=%233B82F6" width="16" style="vertical-align: middle" /> &nbsp;<strong>Game Library</strong></td><td>Upload games (.7z) · IGDB metadata enrichment (cover, genres, rating, release date) · File integrity validation via magic bytes</td></tr>
+<tr><td><img src="https://api.iconify.design/lucide/bar-chart-3.svg?color=%23F59E0B" width="16" style="vertical-align: middle" /> &nbsp;<strong>Playtime Tracking</strong></td><td>Per-user session recording · Total playtime, session count, first/last played · Bidirectional sync with the client</td></tr>
+<tr><td><img src="https://api.iconify.design/lucide/puzzle.svg?color=%238B5CF6" width="16" style="vertical-align: middle" /> &nbsp;<strong>Mod Management</strong></td><td>Upload mods linked to a game · Type, version, platform metadata · Download and install tracking</td></tr>
+<tr><td><img src="https://api.iconify.design/lucide/folder-open.svg?color=%238B5CF6" width="16" style="vertical-align: middle" /> &nbsp;<strong>Collections</strong></td><td>Custom collections and smart playlists · Icons, colors, pinning · Recently played, most played, installed</td></tr>
+<tr><td><img src="https://api.iconify.design/lucide/users.svg?color=%2306B6D4" width="16" style="vertical-align: middle" /> &nbsp;<strong>User Roles</strong></td><td>JWT + rotating refresh tokens · Three roles: Admin / Moderator / Member · Access control enforced per route</td></tr>
+<tr><td><img src="https://api.iconify.design/lucide/zap.svg?color=%23F59E0B" width="16" style="vertical-align: middle" /> &nbsp;<strong>Real-time</strong></td><td>Socket.IO broadcasts for new games, notifications · Instant client updates without polling</td></tr>
+</table>
 
-Admins can upload games (`.7z` format) to the server. Each game is enriched with metadata fetched automatically from **IGDB** (title, cover, genres, release date, rating, multiplayer info, etc.). Members can browse the library and download games directly from the server.
-
-### Playtime Tracking
-
-Every game session is recorded. The backend tracks total playtime, number of sessions, first launch date, and last played date per user per game. Stats are synced bidirectionally with the client.
-
-### Mod Management
-
-Admins can upload mods (`.7z`) linked to a specific game. Mods carry metadata such as type (gameplay, visual, audio…), compatible game versions, and target platforms. Members can browse, download, and mark mods as installed.
-
-### Collections
-
-Users can organize their games into custom collections or smart playlists (recently played, most played, installed, etc.). Collections support custom icons, colors, pinning, and drag-and-drop ordering.
-
-### User Accounts & Roles
-
-Authentication is JWT-based with rotating refresh tokens. Three roles — **admin**, **moderator**, and **member** — with access control enforced on every sensitive endpoint.
-
-### Real-time Notifications
-
-A Socket.IO layer broadcasts events to all connected clients in real time (e.g. when a new game is added to the library).
+<br />
 
 ---
 
@@ -63,7 +72,7 @@ A Socket.IO layer broadcasts events to all connected clients in real time (e.g. 
 ### Prerequisites
 
 - Node.js 22+
-- MongoDB **4** — MongoDB 5.0+ requires AVX CPU instructions, which many home servers and older machines lack. MongoDB 4 has no such requirement and runs on any x86-64 hardware.
+- MongoDB **4** — MongoDB 5.0+ requires AVX CPU instructions, which many home servers and older machines lack. MongoDB 4 runs on any x86-64 hardware.
 
 ### Installation
 
@@ -72,6 +81,8 @@ git clone https://github.com/Valt1-0/drathos-backend.git
 cd drathos-backend
 npm install
 cp .env.example .env   # then edit .env
+npm run dev            # development (auto-reload)
+npm start              # production
 ```
 
 ### Configuration
@@ -90,16 +101,7 @@ cp .env.example .env   # then edit .env
 
 > **IGDB**: metadata lookup requires a free [Twitch Developer](https://dev.twitch.tv) app.
 
-### Run
-
-```bash
-npm run dev    # development (auto-reload)
-npm start      # production
-```
-
----
-
-## Docker
+### Docker
 
 ```bash
 # Docker Compose (includes MongoDB)
@@ -113,6 +115,8 @@ docker build -t valt1n/drathos-backend:1.0.0 .
 ```
 
 The compose file sets up Traefik labels for HTTPS termination and connects the backend to MongoDB on an internal network.
+
+<br />
 
 ---
 
@@ -128,6 +132,8 @@ The compose file sets up Traefik labels for HTTPS termination and connects the b
 
 To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
 
+<br />
+
 ---
 
 ## Contributing
@@ -135,8 +141,14 @@ To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and pull request guidelines.
 Please read the [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
+<br />
+
 ---
 
-## License
-
-GPL-3.0 © [Valt](https://github.com/Valt1-0)
+<div align="center">
+  <br />
+  <sub>Built with ❤️ by <strong>Valt</strong></sub>
+  <br />
+  <sub><a href="https://github.com/Valt1-0/drathos-backend">github.com/Valt1-0/drathos-backend</a></sub>
+  <br /><br />
+</div>
