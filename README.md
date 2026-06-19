@@ -136,6 +136,18 @@ To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
 
 ---
 
+## Legal Disclaimer
+
+Drathos Backend is a **self-hosted server** — it does not host, distribute, or provide access to any games or content on behalf of its developers. All content stored on the server is uploaded and managed exclusively by the person who self-hosts the software.
+
+You are solely responsible for ensuring that any content uploaded to your server complies with applicable copyright laws and the terms of any relevant licenses. The developers of Drathos do not condone piracy or any unauthorized distribution of copyrighted material.
+
+This software is provided "as is", without warranty of any kind. See the [LICENSE](LICENSE) for details.
+
+<br />
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and pull request guidelines.
