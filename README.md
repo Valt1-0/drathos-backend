@@ -19,11 +19,11 @@ Drathos Backend is the REST API + WebSocket server powering the Drathos gaming p
 
 ### Game Library
 
-Admins can upload games (`.7z` format only for now) to the server. Each game is enriched with metadata fetched automatically from **IGDB** (title, cover, genres, release date, rating, multiplayer info, etc.). Members can browse the library and download games directly from the server.
+Admins can upload games (`.7z` format) to the server. Each game is enriched with metadata fetched automatically from **IGDB** (title, cover, genres, release date, rating, multiplayer info, etc.). Members can browse the library and download games directly from the server.
 
 ### Playtime Tracking
 
-Every game session is recorded. The backend tracks total playtime, number of sessions, first launch date, and last played date per user per game. Stats can be synced bidirectionally between the client and the server.
+Every game session is recorded. The backend tracks total playtime, number of sessions, first launch date, and last played date per user per game. Stats are synced bidirectionally with the client.
 
 ### Mod Management
 
@@ -35,11 +35,11 @@ Users can organize their games into custom collections or smart playlists (recen
 
 ### User Accounts & Roles
 
-Authentication is JWT-based. Three roles are available — **admin**, **moderator**, and **member** — with access control enforced on every sensitive endpoint. Admins can promote or demote users at any time.
+Authentication is JWT-based with rotating refresh tokens. Three roles — **admin**, **moderator**, and **member** — with access control enforced on every sensitive endpoint.
 
 ### Real-time Notifications
 
-A Socket.IO layer broadcasts events to all connected clients in real time (e.g. when a new game is added to the library). The client updates instantly without polling.
+A Socket.IO layer broadcasts events to all connected clients in real time (e.g. when a new game is added to the library).
 
 ---
 
@@ -68,7 +68,7 @@ A Socket.IO layer broadcasts events to all connected clients in real time (e.g. 
 ### Installation
 
 ```bash
-git clone https://github.com/valt1n/drathos-backend.git
+git clone https://github.com/Valt1-0/drathos-backend.git
 cd drathos-backend
 npm install
 cp .env.example .env   # then edit .env
@@ -119,13 +119,24 @@ The compose file sets up Traefik labels for HTTPS termination and connects the b
 ## Security
 
 - Passwords hashed with **bcrypt** (12 rounds)
-- **JWT** access tokens (4h expiry) + refresh tokens (7 days)
-- **Helmet** for HTTP headers hardening
+- **JWT** access tokens (4h expiry) + rotating refresh tokens (7 days, SHA-256 hashed in DB)
+- **Helmet** for HTTP security headers
 - **Rate limiting** — 500 req/min globally, 20 login attempts/15 min in production
 - Input validation on all write endpoints via **express-validator**
+- File uploads validated by magic bytes (not just extension) and restricted to configured directories
+- Stack traces never exposed in HTTP responses
+
+To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and pull request guidelines.
+Please read the [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ---
 
 ## License
 
-MIT © [Valt](https://github.com/valt1-0)
+GPL-3.0 © [Valt](https://github.com/Valt1-0)
