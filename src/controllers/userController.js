@@ -1,7 +1,8 @@
 import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
 import { revokeToken } from "../middlewares/authMiddleware.js";
-import { ROLES, JWT_EXPIRES_IN, MAX_PROFILE_PIC_SIZE } from "../utils/constants.js";
+import { ROLES, JWT_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN, MAX_PROFILE_PIC_SIZE } from "../utils/constants.js";
+import crypto from "crypto";
 import User from "../models/userModel.js";
 import InstalledGame from "../models/installedGameModel.js";
 import multer from "multer";
@@ -38,17 +39,14 @@ const signToken = (user) => {
         role: user.role,
       },
     };
-    jwt.sign(
-      payload,
-      JWT_TOKEN,
-      { expiresIn: JWT_EXPIRES_IN },
-      (err, token) => {
-        if (err) reject(err);
-        else resolve(token);
-      },
-    );
+    jwt.sign(payload, JWT_TOKEN, { expiresIn: JWT_EXPIRES_IN }, (err, token) => {
+      if (err) reject(err);
+      else resolve(token);
+    });
   });
 };
+
+const generateRefreshToken = () => crypto.randomBytes(40).toString("hex");
 
 const deleteProfileFile = async (profilePicture) => {
   if (!profilePicture?.includes(PROFILE_URL_PREFIX)) return;
@@ -121,6 +119,22 @@ const fileFilter = (req, file, cb) => {
   cb(null, ALLOWED_MIME_TYPES.includes(file.mimetype));
 };
 
+const validateImageMagicBytes = async (filePath) => {
+  const buf = Buffer.alloc(12);
+  const fh = await fs.open(filePath, "r");
+  try {
+    await fh.read(buf, 0, 12, 0);
+  } finally {
+    await fh.close();
+  }
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return true; // JPEG
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return true; // PNG
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true; // GIF
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && // WebP: RIFF....WEBP
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
+  return false;
+};
+
 export const uploadMiddleware = multer({
   storage,
   fileFilter,
@@ -144,8 +158,13 @@ export const register = async (req, res) => {
       role: isFirstUser ? "admin" : "member",
     });
 
-    const token = await signToken(user);
-    res.json({ token, message: "User registered successfully" });
+    const refreshToken = generateRefreshToken();
+    const [token] = await Promise.all([
+      signToken(user),
+      (async () => { user.setRefreshToken(refreshToken); await user.save(); })(),
+    ]);
+
+    res.json({ token, refreshToken, message: "User registered successfully" });
   } catch (err) {
     logger.error("[userController] register error:", err.message);
     res.status(500).json({ message: "Server error" });
@@ -156,17 +175,55 @@ export const login = async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username }).select("+refreshTokenHash +refreshTokenExpiresAt");
     if (!user || !(await user.matchPassword(password))) {
-      return res
-        .status(400)
-        .json({ error: true, message: "Invalid credentials" });
+      return res.status(400).json({ error: true, message: "Invalid credentials" });
     }
 
-    const token = await signToken(user);
-    res.json({ token });
+    const [accessToken, refreshToken] = await Promise.all([
+      signToken(user),
+      Promise.resolve(generateRefreshToken()),
+    ]);
+
+    user.setRefreshToken(refreshToken);
+    await user.save();
+
+    res.json({ token: accessToken, refreshToken });
   } catch (err) {
     logger.error("[userController] login error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const refreshAccessToken = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token required." });
+  }
+
+  try {
+    const hash = crypto.createHash("sha256").update(refreshToken).digest("hex");
+    const user = await User.findOne({
+      refreshTokenHash: hash,
+      refreshTokenExpiresAt: { $gt: new Date() },
+    }).select("+refreshTokenHash +refreshTokenExpiresAt");
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid or expired refresh token." });
+    }
+
+    // Rolling session: issue a new refresh token so the 7-day window resets on each use.
+    // The old token is immediately replaced in the DB — it cannot be reused.
+    const newRefreshToken = generateRefreshToken();
+    const [newAccessToken] = await Promise.all([
+      signToken(user),
+      (async () => { user.setRefreshToken(newRefreshToken); await user.save(); })(),
+    ]);
+
+    res.json({ token: newAccessToken, refreshToken: newRefreshToken });
+  } catch (err) {
+    logger.error("[userController] refreshAccessToken error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -307,6 +364,11 @@ export const uploadProfilePicture = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
+    if (!(await validateImageMagicBytes(req.file.path))) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ message: "Invalid file type" });
+    }
+
     const user = await User.findById(req.user.id)
       .select("profilePicture")
       .lean();
@@ -415,9 +477,14 @@ export const updateUserRole = async (req, res) => {
 export const logout = async (req, res) => {
   try {
     const token = req.header("Authorization")?.replace("Bearer ", "");
-    if (token) {
-      revokeToken(token);
-    }
+    if (token) revokeToken(token);
+
+    // Invalidate refresh token for this user
+    await User.findByIdAndUpdate(req.user.id, {
+      refreshTokenHash: null,
+      refreshTokenExpiresAt: null,
+    });
+
     res.status(200).json({ message: "Logged out successfully." });
   } catch (error) {
     logger.error("[logout] Error:", error.message);

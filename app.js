@@ -43,6 +43,7 @@ const API_PORT = process.env.API_PORT || 5001;
 
 const app = express();
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 const rawOrigins = process.env.CORS_ALLOWED_ORIGINS || "*";
@@ -73,8 +74,8 @@ io.use((socket, next) => {
 setIO(io);
 
 io.on("connection", (socket) => {
-  logger.info(`Client connecté: ${socket.id} (user: ${socket.user?.username})`);
-  socket.on("disconnect", () => logger.info(`Client déconnecté: ${socket.id}`));
+  logger.info(`Client connected: ${socket.id} (user: ${socket.user?.username})`);
+  socket.on("disconnect", () => logger.info(`Client disconnected: ${socket.id}`));
 });
 
 const startServer = async () => {
@@ -142,27 +143,27 @@ const startServer = async () => {
     app.use(errorHandler);
 
     httpServer.listen(API_PORT, () => {
-      logger.info(`Serveur Drathos démarré sur le port ${API_PORT}`);
-      logger.info(`Socket.IO activé`);
-      logger.info(`Sécurité activée : Helmet, CORS, Rate Limiting`);
-      logger.info(`Logs disponibles dans ./logs/`);
+      logger.info(`Drathos server started on port ${API_PORT}`);
+      logger.info(`Socket.IO enabled`);
+      logger.info(`Security enabled: Helmet, CORS, Rate Limiting`);
+      logger.info(`Logs available in ./logs/`);
     });
 
     setInterval(async () => {
       try {
         if (mongoose.connection.readyState !== 1) {
-          logger.error(`[healthcheck] MongoDB non connecté (state: ${mongoose.connection.readyState})`);
+          logger.error(`[healthcheck] MongoDB not connected (state: ${mongoose.connection.readyState})`);
           return;
         }
         await mongoose.connection.db.admin().ping();
       } catch (err) {
-        logger.error("[healthcheck] MongoDB ping échoué:", err.message);
+        logger.error("[healthcheck] MongoDB ping failed:", err.message);
       }
     }, 30_000).unref();
 
     return app;
   } catch (error) {
-    logger.error("Erreur au démarrage du serveur:", error);
+    logger.error("Server startup error:", error);
     process.exit(1);
   }
 };
@@ -170,11 +171,11 @@ const startServer = async () => {
 startServer();
 
 const shutdown = async (signal) => {
-  logger.info(`\n${signal} reçu — arrêt propre du serveur...`);
+  logger.info(`\n${signal} received — graceful shutdown...`);
   setTimeout(() => process.exit(1), 10000).unref();
   await new Promise((resolve) => httpServer.close(resolve));
   await mongoose.connection.close();
-  logger.info("Connexion MongoDB fermée.");
+  logger.info("MongoDB connection closed.");
   process.exit(0);
 };
 

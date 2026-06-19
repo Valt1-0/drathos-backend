@@ -86,7 +86,7 @@ export const addGame = async (req, res) => {
     if (freeBytes < MIN_FREE_BYTES) {
       return res.status(507).json({
         error: true,
-        message: "Espace disque insuffisant sur le serveur (minimum 10 GB requis).",
+        message: "Insufficient disk space on the server (minimum 10 GB required).",
       });
     }
   } catch {
@@ -138,7 +138,7 @@ export const addGame = async (req, res) => {
         fs.unlinkSync(req.file.path);
         return res.status(400).json({
           error: true,
-          message: "Le fichier ne correspond pas à son extension (signature invalide).",
+          message: "File does not match its extension (invalid signature).",
         });
       }
 
@@ -229,14 +229,16 @@ export const addGame = async (req, res) => {
       if (error.code === 11000) {
         return res.status(409).json({
           error: true,
-          message: "Ce jeu existe déjà sur le serveur (même IGDB ID et même version).",
+          message: "This game already exists on the server (same IGDB ID and version).",
         });
       }
 
       if (
         error.message &&
-        (error.message.includes("invalide") ||
-          error.message.includes("interdit"))
+        (error.message.includes("invalid") ||
+          error.message.includes("forbidden") ||
+          error.message.includes("Disallowed") ||
+          error.message.includes("too long"))
       ) {
         return res.status(400).json({
           error: true,
@@ -247,7 +249,7 @@ export const addGame = async (req, res) => {
       res.status(500).json({
         error: true,
         message: "Server error",
-        details: error.message,
+        ...(process.env.NODE_ENV !== "production" && { details: error.message }),
       });
     }
   });
@@ -263,14 +265,14 @@ export const getAllGames = async (req, res) => {
       const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
       const skip = (pageNum - 1) * limitNum;
       const [games, total] = await Promise.all([
-        Game.find().sort({ addedDate: -1 }).skip(skip).limit(limitNum),
+        Game.find().sort({ addedAt: -1 }).skip(skip).limit(limitNum),
         Game.countDocuments(),
       ]);
       return res.status(200).json({ games, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
     }
 
     const [games, total] = await Promise.all([
-      Game.find().sort({ addedDate: -1 }).limit(100),
+      Game.find().sort({ addedAt: -1 }).limit(100),
       Game.countDocuments(),
     ]);
     res.status(200).json({ games, total });
@@ -339,7 +341,7 @@ export const updateGame = async (req, res) => {
           fs.unlinkSync(req.file.path);
           return res.status(400).json({
             error: true,
-            message: "Le fichier ne correspond pas à son extension (signature invalide).",
+            message: "File does not match its extension (invalid signature).",
           });
         }
 
@@ -450,8 +452,9 @@ export const deleteGame = async (req, res) => {
     let errorCode = "DELETE_FAILED";
 
     if (
-      error.message.includes("interdit") ||
-      error.message.includes("introuvable")
+      error.message.includes("forbidden") ||
+      error.message.includes("not found") ||
+      error.message.includes("not allowed")
     ) {
       statusCode = 403;
       errorCode = "PATH_VALIDATION_ERROR";
@@ -464,7 +467,7 @@ export const deleteGame = async (req, res) => {
       error: true,
       message: "Error deleting game.",
       code: errorCode,
-      details: error.message,
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
@@ -534,8 +537,8 @@ export const downloadGame = async (req, res) => {
     logger.error("[downloadGame] Error:", error.message);
 
     if (
-      error.message.includes("introuvable") ||
-      error.message.includes("interdit")
+      error.message.includes("not found") ||
+      error.message.includes("not allowed")
     ) {
       return res.status(404).json({ message: error.message });
     }

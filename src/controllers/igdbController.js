@@ -69,11 +69,11 @@ export const searchGames = async (req, res) => {
     const { game } = req.query;
 
     if (!game || typeof game !== "string" || game.trim().length === 0) {
-      return res.status(400).json({ error: "Paramètre 'game' requis." });
+      return res.status(400).json({ error: "'game' parameter is required." });
     }
 
     if (game.length > 100) {
-      return res.status(400).json({ error: "Recherche trop longue (max 100 caractères)." });
+      return res.status(400).json({ error: "Search query too long (max 100 characters)." });
     }
 
     const sanitizedGame = game
@@ -81,7 +81,7 @@ export const searchGames = async (req, res) => {
       .trim();
 
     if (!sanitizedGame) {
-      return res.status(400).json({ error: "Paramètres de recherche invalides." });
+      return res.status(400).json({ error: "Invalid search parameters." });
     }
 
     const token = await getToken();
@@ -97,20 +97,20 @@ export const searchGames = async (req, res) => {
     });
 
     if (!igdbRes.ok) {
-      logger.error("Erreur API IGDB:", igdbRes.status, igdbRes.statusText);
+      logger.error("IGDB API error:", igdbRes.status, igdbRes.statusText);
       return res
         .status(igdbRes.status)
         .json({ error: "Failed to fetch from IGDB" });
     }
 
     const data = await igdbRes.json();
-    logger.info("Jeux récupérés:", data.length);
+    logger.info("Games retrieved:", data.length);
     res.json(data);
   } catch (err) {
-    logger.error("Erreur lors de la recherche des jeux:", err);
+    logger.error("Error searching games:", err);
     res
       .status(500)
-      .json({ error: "Erreur serveur lors de la recherche des jeux" });
+      .json({ error: "Server error while searching games" });
   }
 };
 

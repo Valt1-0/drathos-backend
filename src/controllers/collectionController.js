@@ -13,18 +13,18 @@ export const createCollection = async (req, res) => {
 
     const trimmedName = typeof name === "string" ? name.trim() : "";
     if (!trimmedName || trimmedName.length > 100) {
-      return res.status(400).json({ message: "Le nom est requis (max 100 caractères)." });
+      return res.status(400).json({ message: "Name is required (max 100 characters)." });
     }
     if (icon !== undefined && !ICON_RE.test(icon)) {
-      return res.status(400).json({ message: "Icône invalide." });
+      return res.status(400).json({ message: "Invalid icon." });
     }
     if (color !== undefined && !COLOR_RE.test(color)) {
-      return res.status(400).json({ message: "Couleur invalide (format #rrggbb attendu)." });
+      return res.status(400).json({ message: "Invalid color (expected #rrggbb format)." });
     }
 
     const existing = await Collection.findOne({ userId, name: trimmedName });
     if (existing) {
-      return res.status(409).json({ message: "Une collection avec ce nom existe déjà" });
+      return res.status(409).json({ message: "A collection with this name already exists" });
     }
 
     const collection = new Collection({
@@ -39,10 +39,10 @@ export const createCollection = async (req, res) => {
 
     await collection.save();
 
-    res.status(201).json({ message: "Collection créée avec succès", collection });
+    res.status(201).json({ message: "Collection created successfully", collection });
   } catch (err) {
-    logger.error("Erreur lors de la création de la collection:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error creating collection:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -64,8 +64,8 @@ export const getUserCollections = async (req, res) => {
 
     res.status(200).json(collectionsWithCount);
   } catch (err) {
-    logger.error("Erreur lors de la récupération des collections:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error fetching collections:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -81,13 +81,13 @@ export const getCollectionById = async (req, res) => {
       });
 
     if (!collection) {
-      return res.status(404).json({ message: "Collection non trouvée" });
+      return res.status(404).json({ message: "Collection not found" });
     }
 
     res.status(200).json(collection);
   } catch (err) {
-    logger.error("Erreur lors de la récupération de la collection:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error fetching collection:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -100,28 +100,28 @@ export const updateCollection = async (req, res) => {
     const collection = await Collection.findOne({ _id: id, userId });
 
     if (!collection) {
-      return res.status(404).json({ message: "Collection non trouvée" });
+      return res.status(404).json({ message: "Collection not found" });
     }
 
     if (icon !== undefined && !ICON_RE.test(icon)) {
-      return res.status(400).json({ message: "Icône invalide." });
+      return res.status(400).json({ message: "Invalid icon." });
     }
     if (color !== undefined && !COLOR_RE.test(color)) {
-      return res.status(400).json({ message: "Couleur invalide (format #rrggbb attendu)." });
+      return res.status(400).json({ message: "Invalid color (expected #rrggbb format)." });
     }
 
     const trimmedName = typeof name === "string" ? name.trim() : undefined;
     if (trimmedName !== undefined && trimmedName.length === 0) {
-      return res.status(400).json({ message: "Le nom ne peut pas être vide." });
+      return res.status(400).json({ message: "Name cannot be empty." });
     }
     if (trimmedName && trimmedName.length > 100) {
-      return res.status(400).json({ message: "Le nom est trop long (max 100 caractères)." });
+      return res.status(400).json({ message: "Name is too long (max 100 characters)." });
     }
 
     if (trimmedName && trimmedName !== collection.name) {
       const existing = await Collection.findOne({ userId, name: trimmedName });
       if (existing) {
-        return res.status(409).json({ message: "Une collection avec ce nom existe déjà" });
+        return res.status(409).json({ message: "A collection with this name already exists" });
       }
       collection.name = trimmedName;
     }
@@ -133,10 +133,10 @@ export const updateCollection = async (req, res) => {
     collection.updatedAt = Date.now();
     await collection.save();
 
-    res.status(200).json({ message: "Collection mise à jour avec succès", collection });
+    res.status(200).json({ message: "Collection updated successfully", collection });
   } catch (err) {
-    logger.error("Erreur lors de la mise à jour de la collection:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error updating collection:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -148,13 +148,13 @@ export const deleteCollection = async (req, res) => {
     const collection = await Collection.findOneAndDelete({ _id: id, userId });
 
     if (!collection) {
-      return res.status(404).json({ message: "Collection non trouvée" });
+      return res.status(404).json({ message: "Collection not found" });
     }
 
-    res.status(200).json({ message: "Collection supprimée avec succès" });
+    res.status(200).json({ message: "Collection deleted successfully" });
   } catch (err) {
-    logger.error("Erreur lors de la suppression de la collection:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error deleting collection:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -165,16 +165,16 @@ export const addGamesToCollection = async (req, res) => {
     const { gameIds } = req.body;
 
     if (!gameIds || !Array.isArray(gameIds) || gameIds.length === 0) {
-      return res.status(400).json({ message: "La liste des jeux est requise" });
+      return res.status(400).json({ message: "Game list is required" });
     }
     if (gameIds.some((id) => !isValidObjectId(id))) {
-      return res.status(400).json({ message: "Un ou plusieurs gameIds sont invalides." });
+      return res.status(400).json({ message: "One or more gameIds are invalid." });
     }
 
     const collection = await Collection.findOne({ _id: id, userId });
 
     if (!collection) {
-      return res.status(404).json({ message: "Collection non trouvée" });
+      return res.status(404).json({ message: "Collection not found" });
     }
 
     gameIds.forEach(gameId => {
@@ -189,10 +189,10 @@ export const addGamesToCollection = async (req, res) => {
       select: "name coverUrl genres platforms"
     });
 
-    res.status(200).json({ message: "Jeux ajoutés avec succès", collection });
+    res.status(200).json({ message: "Games added successfully", collection });
   } catch (err) {
-    logger.error("Erreur lors de l'ajout des jeux:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error adding games:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -203,16 +203,16 @@ export const removeGamesFromCollection = async (req, res) => {
     const { gameIds } = req.body;
 
     if (!gameIds || !Array.isArray(gameIds) || gameIds.length === 0) {
-      return res.status(400).json({ message: "La liste des jeux est requise" });
+      return res.status(400).json({ message: "Game list is required" });
     }
     if (gameIds.some((id) => !isValidObjectId(id))) {
-      return res.status(400).json({ message: "Un ou plusieurs gameIds sont invalides." });
+      return res.status(400).json({ message: "One or more gameIds are invalid." });
     }
 
     const collection = await Collection.findOne({ _id: id, userId });
 
     if (!collection) {
-      return res.status(404).json({ message: "Collection non trouvée" });
+      return res.status(404).json({ message: "Collection not found" });
     }
 
     gameIds.forEach(gameId => {
@@ -222,9 +222,9 @@ export const removeGamesFromCollection = async (req, res) => {
     collection.updatedAt = Date.now();
     await collection.save();
 
-    res.status(200).json({ message: "Jeux retirés avec succès", collection });
+    res.status(200).json({ message: "Games removed successfully", collection });
   } catch (err) {
-    logger.error("Erreur lors du retrait des jeux:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error removing games:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

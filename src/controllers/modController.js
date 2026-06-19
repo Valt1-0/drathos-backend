@@ -484,8 +484,9 @@ export const deleteMod = async (req, res) => {
     let errorCode = "DELETE_FAILED";
 
     if (
-      error.message.includes("interdit") ||
-      error.message.includes("introuvable")
+      error.message.includes("forbidden") ||
+      error.message.includes("not found") ||
+      error.message.includes("not allowed")
     ) {
       statusCode = 403;
       errorCode = "PATH_VALIDATION_ERROR";

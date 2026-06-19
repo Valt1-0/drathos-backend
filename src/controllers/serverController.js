@@ -101,7 +101,7 @@ export const patchServerSettings = async (req, res) => {
       if (oversizedGames.length > 0) {
         warnings.push({
           field: "maxGameSizeGB",
-          message: `${oversizedGames.length} jeu(x) existant(s) dépassent la nouvelle limite de ${patch.maxGameSizeGB} GB.`,
+          message: `${oversizedGames.length} existing game(s) exceed the new limit of ${patch.maxGameSizeGB} GB.`,
           affected: oversizedGames.map((g) => ({ name: g.name, sizeMB: g.sizeMB })),
         });
       }
@@ -115,7 +115,7 @@ export const patchServerSettings = async (req, res) => {
       if (oversizedMods.length > 0) {
         warnings.push({
           field: "maxModSizeGB",
-          message: `${oversizedMods.length} mod(s) existant(s) dépassent la nouvelle limite de ${patch.maxModSizeGB} GB.`,
+          message: `${oversizedMods.length} existing mod(s) exceed the new limit of ${patch.maxModSizeGB} GB.`,
           affected: oversizedMods.map((m) => ({ name: m.name, sizeMB: m.sizeMB })),
         });
       }

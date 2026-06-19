@@ -14,7 +14,7 @@ export const errorHandler = (err, req, res, next) => {
     const errors = Object.values(err.errors).map((val) => val.message);
     return res.status(400).json({
       error: true,
-      message: "Erreur de validation",
+      message: "Validation error",
       details: errors,
     });
   }
@@ -23,28 +23,28 @@ export const errorHandler = (err, req, res, next) => {
     const field = Object.keys(err.keyValue)[0];
     return res.status(400).json({
       error: true,
-      message: `${field} déjà existant`,
+      message: `${field} already exists`,
     });
   }
 
   if (err.name === "JsonWebTokenError") {
     return res.status(401).json({
       error: true,
-      message: "Token invalide",
+      message: "Invalid token",
     });
   }
 
   if (err.name === "TokenExpiredError") {
     return res.status(401).json({
       error: true,
-      message: "Token expiré",
+      message: "Token expired",
     });
   }
 
   if (err.code === "ENOENT") {
     return res.status(404).json({
       error: true,
-      message: "Fichier non trouvé",
+      message: "File not found",
     });
   }
 
@@ -52,7 +52,7 @@ export const errorHandler = (err, req, res, next) => {
   // Mask internal details for 5xx in production — message may contain sensitive info
   const message =
     statusCode >= 500 && process.env.NODE_ENV === "production"
-      ? "Erreur serveur interne"
+      ? "Internal server error"
       : err.message;
 
   // Stack is already logged above — never expose it in HTTP responses
@@ -63,7 +63,7 @@ export const errorHandler = (err, req, res, next) => {
 };
 
 export const notFoundHandler = (req, res, next) => {
-  const error = new Error(`Route non trouvée - ${req.originalUrl}`);
+  const error = new Error(`Route not found - ${req.originalUrl}`);
   error.statusCode = 404;
   next(error);
 };

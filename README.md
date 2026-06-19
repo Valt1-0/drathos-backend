@@ -2,10 +2,10 @@
 
 > Self-hosted game library server — manage, distribute, and track your games across your local network.
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/valt1n/drathos-backend)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/Valt1-0/drathos-backend)
 [![Docker](https://img.shields.io/badge/docker-valt1n%2Fdrathos--backend-blue?logo=docker)](https://hub.docker.com/r/valt1n/drathos-backend)
 [![Node](https://img.shields.io/badge/node-22-green?logo=node.js)](https://nodejs.org)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-22C55E)](LICENSE)
 
 ---
 
@@ -109,7 +109,7 @@ docker compose up
 docker pull valt1n/drathos-backend:latest
 
 # Build locally
-docker build -t valt1n/drathos-backend:0.7.0 .
+docker build -t valt1n/drathos-backend:1.0.0 .
 ```
 
 The compose file sets up Traefik labels for HTTPS termination and connects the backend to MongoDB on an internal network.
@@ -118,8 +118,8 @@ The compose file sets up Traefik labels for HTTPS termination and connects the b
 
 ## Security
 
-- Passwords hashed with **bcrypt** (10 rounds)
-- **JWT** tokens with 30-day expiry
+- Passwords hashed with **bcrypt** (12 rounds)
+- **JWT** access tokens (4h expiry) + refresh tokens (7 days)
 - **Helmet** for HTTP headers hardening
 - **Rate limiting** — 500 req/min globally, 20 login attempts/15 min in production
 - Input validation on all write endpoints via **express-validator**

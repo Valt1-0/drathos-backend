@@ -18,8 +18,8 @@ export const getAllRequests = async (req, res) => {
 
     res.status(200).json({ requests, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
-    logger.error("Erreur getAllRequests:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error getAllRequests:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -29,13 +29,13 @@ export const createRequest = async (req, res) => {
     const { gameTitle, description } = req.body;
 
     if (typeof gameTitle !== "string" || !gameTitle.trim()) {
-      return res.status(400).json({ message: "Le titre du jeu est requis" });
+      return res.status(400).json({ message: "Game title is required" });
     }
     if (gameTitle.length > 200) {
-      return res.status(400).json({ message: "Le titre du jeu est trop long (max 200 caractères)" });
+      return res.status(400).json({ message: "Game title is too long (max 200 characters)" });
     }
     if (description !== undefined && (typeof description !== "string" || description.length > 500)) {
-      return res.status(400).json({ message: "La description est invalide (max 500 caractères)" });
+      return res.status(400).json({ message: "Description is invalid (max 500 characters)" });
     }
 
     const request = new GameRequest({
@@ -48,8 +48,8 @@ export const createRequest = async (req, res) => {
     await request.populate("userId", "username role");
     res.status(201).json(request);
   } catch (err) {
-    logger.error("Erreur createRequest:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error createRequest:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -63,12 +63,12 @@ export const deleteRequest = async (req, res) => {
     const deleted = await GameRequest.findOneAndDelete(filter);
 
     if (!deleted) {
-      return res.status(404).json({ message: "Demande introuvable ou non autorisée" });
+      return res.status(404).json({ message: "Request not found or unauthorized" });
     }
 
-    res.status(200).json({ message: "Demande supprimée" });
+    res.status(200).json({ message: "Request deleted" });
   } catch (err) {
-    logger.error("Erreur deleteRequest:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error deleteRequest:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

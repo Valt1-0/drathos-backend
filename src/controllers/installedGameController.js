@@ -10,18 +10,18 @@ export const addInstalledGame = async (req, res) => {
     const { serverGameId, path, version, installSize } = req.body;
 
     if (!serverGameId || !path) {
-      return res.status(400).json({ message: "Champs requis manquants." });
+      return res.status(400).json({ message: "Required fields are missing." });
     }
 
     if (!isValidObjectId(serverGameId)) {
-      return res.status(400).json({ message: "serverGameId invalide." });
+      return res.status(400).json({ message: "Invalid serverGameId." });
     }
 
     const existing = await InstalledGame.findOne({ userId, serverGameId });
     if (existing) {
       return res
         .status(200)
-        .json({ message: "Déjà installé", alreadyExists: true });
+        .json({ message: "Already installed", alreadyExists: true });
     }
 
     const installedGame = new InstalledGame({
@@ -48,10 +48,10 @@ export const addInstalledGame = async (req, res) => {
 
     res
       .status(201)
-      .json({ message: "Jeu installé ajouté avec succès", installedGame });
+      .json({ message: "Installed game added successfully", installedGame });
   } catch (err) {
-    logger.error("Erreur lors de l'ajout d'un jeu installé:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    logger.error("Error adding installed game:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -74,7 +74,7 @@ export const getInstalledGames = async (req, res) => {
         sessionsCount: game.stats.totalSessions,
         lastPlayedFormatted: game.stats.lastPlayed
           ? new Date(game.stats.lastPlayed).toLocaleDateString()
-          : "Jamais joué",
+          : "Never played",
         isCurrentlyPlaying: game.stats.currentSession.isPlaying,
         installSizeFormatted: `${game.installSize || 0} MB`,
       },
@@ -83,7 +83,7 @@ export const getInstalledGames = async (req, res) => {
     res.status(200).json(formattedGames);
   } catch (err) {
     logger.error("Error fetching installed games:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -98,7 +98,7 @@ export const launchGame = async (req, res) => {
     });
 
     if (!installedGame) {
-      return res.status(404).json({ message: "Jeu non installé" });
+      return res.status(404).json({ message: "Game not installed" });
     }
 
     installedGame.stats.currentSession.startTime = Date.now();
@@ -112,13 +112,13 @@ export const launchGame = async (req, res) => {
     await installedGame.save();
 
     res.status(200).json({
-      message: "Jeu lancé",
+      message: "Game launched",
       gamePath: installedGame.path,
       sessionId: installedGame._id,
     });
   } catch (err) {
     logger.error("Error launching game:", err);
-    res.status(500).json({ message: "Erreur lors du lancement" });
+    res.status(500).json({ message: "Error during launch" });
   }
 };
 
@@ -133,7 +133,7 @@ export const stopGame = async (req, res) => {
     });
 
     if (!installedGame || !installedGame.stats.currentSession.isPlaying) {
-      return res.status(404).json({ message: "Aucune session active" });
+      return res.status(404).json({ message: "No active session" });
     }
 
     const sessionStart = installedGame.stats.currentSession.startTime;
@@ -147,13 +147,13 @@ export const stopGame = async (req, res) => {
     await installedGame.save();
 
     res.status(200).json({
-      message: "Session terminée",
+      message: "Session ended",
       sessionDuration: formatPlayTime(sessionDuration),
       totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
     });
   } catch (err) {
     logger.error("[Backend] Error stopping game:", err.message);
-    res.status(500).json({ message: "Erreur lors de l'arrêt" });
+    res.status(500).json({ message: "Error stopping game" });
   }
 };
 
@@ -172,7 +172,7 @@ export const getGameStats = async (req, res) => {
     });
 
     if (!installedGame) {
-      return res.status(404).json({ message: "Jeu non installé" });
+      return res.status(404).json({ message: "Game not installed" });
     }
 
     const stats = {
@@ -207,7 +207,7 @@ export const getGameStats = async (req, res) => {
     logger.error("Error fetching game stats:", err);
     res
       .status(500)
-      .json({ message: "Erreur lors de la récupération des stats" });
+      .json({ message: "Error fetching stats" });
   }
 };
 
@@ -228,7 +228,7 @@ export const syncGameStats = async (req, res) => {
     });
 
     if (!installedGame) {
-      return res.status(404).json({ message: "Jeu non installé" });
+      return res.status(404).json({ message: "Game not installed" });
     }
 
     const oldTotalPlayTime = installedGame.stats.totalPlayTime || 0;
@@ -247,7 +247,7 @@ export const syncGameStats = async (req, res) => {
     await installedGame.save();
 
     res.status(200).json({
-      message: "Stats synchronisées avec succès",
+      message: "Stats synchronized successfully",
       stats: {
         totalPlayTime: formatPlayTime(installedGame.stats.totalPlayTime),
         totalSessions: installedGame.stats.totalSessions,
@@ -258,7 +258,7 @@ export const syncGameStats = async (req, res) => {
     });
   } catch (err) {
     logger.error("[Backend] Error syncing stats:", err.message);
-    res.status(500).json({ message: "Erreur lors de la synchronisation" });
+    res.status(500).json({ message: "Error during synchronization" });
   }
 };
 
@@ -267,7 +267,7 @@ export const removeInstalledGame = async (req, res) => {
     const userId = req.user.id;
     const { gameId } = req.params;
     if (!gameId || !isValidObjectId(gameId)) {
-      return res.status(400).json({ message: "gameId invalide." });
+      return res.status(400).json({ message: "Invalid gameId." });
     }
 
     const result = await InstalledGame.findOneAndDelete({
@@ -277,12 +277,12 @@ export const removeInstalledGame = async (req, res) => {
 
     if (!result) {
       return res.status(404).json({
-        message: "Jeu non trouvé dans les jeux installés",
+        message: "Game not found in installed games",
       });
     }
 
     res.status(200).json({
-      message: "Jeu désinstallé avec succès",
+      message: "Game uninstalled successfully",
       deletedGame: {
         id: result._id,
         serverGameId: result.serverGameId,
@@ -290,10 +290,10 @@ export const removeInstalledGame = async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error("[Backend] Erreur suppression jeu:", error.message);
+    logger.error("[Backend] Error deleting game:", error.message);
     res.status(500).json({
-      message: "Erreur serveur lors de la désinstallation",
-      error: error.message,
+      message: "Server error during uninstall",
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 };
@@ -313,7 +313,7 @@ function formatPlayTime(seconds) {
 
 export const cleanupStuckSessions = async () => {
   try {
-    logger.info("[Cleanup] Vérification des sessions bloquées...");
+    logger.info("[Cleanup] Checking for stuck sessions...");
 
     const result = await InstalledGame.updateMany(
       { "stats.currentSession.isPlaying": true },
@@ -326,9 +326,9 @@ export const cleanupStuckSessions = async () => {
     );
 
     if (result.modifiedCount > 0) {
-      logger.info(`[Cleanup] ${result.modifiedCount} session(s) bloquée(s) réinitialisée(s)`);
+      logger.info(`[Cleanup] ${result.modifiedCount} stuck session(s) reset`);
     } else {
-      logger.info("[Cleanup] Aucune session bloquée");
+      logger.info("[Cleanup] No stuck sessions");
     }
 
     return {
@@ -336,7 +336,7 @@ export const cleanupStuckSessions = async () => {
       cleanedSessions: result.modifiedCount,
     };
   } catch (error) {
-    logger.error("[Cleanup] Erreur nettoyage sessions:", error.message);
+    logger.error("[Cleanup] Error cleaning up sessions:", error.message);
     return {
       success: false,
       error: error.message,

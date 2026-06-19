@@ -25,22 +25,20 @@ export function sanitizePath(basePath, userPath) {
 
 export function validateFileName(filename) {
   if (!filename || typeof filename !== "string") {
-    throw new Error("Nom de fichier invalide");
+    throw new Error("Invalid filename");
   }
 
   const forbiddenChars = /[<>:"|?*\x00-\x1F]/g;
   if (forbiddenChars.test(filename)) {
-    throw new Error("Nom de fichier contient des caractères interdits");
+    throw new Error("Filename contains forbidden characters");
   }
 
   if (filename.includes("..")) {
-    throw new Error(
-      "Nom de fichier invalide: tentative de path traversal détectée"
-    );
+    throw new Error("Invalid filename: path traversal attempt detected");
   }
 
   if (filename.includes("/") || filename.includes("\\")) {
-    throw new Error("Nom de fichier invalide: chemin non autorisé");
+    throw new Error("Invalid filename: path separators not allowed");
   }
 
   const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".tar.gz", ".tar.bz2"];
@@ -49,11 +47,11 @@ export function validateFileName(filename) {
 
   if (!hasAllowedExtension) {
     const ext = path.extname(filename).toLowerCase();
-    throw new Error(`Extension non autorisée: ${ext}`);
+    throw new Error(`Disallowed extension: ${ext}`);
   }
 
   if (filename.length > 255) {
-    throw new Error("Nom de fichier trop long (max 255 caractères)");
+    throw new Error("Filename too long (max 255 characters)");
   }
 
   return filename;
@@ -63,12 +61,12 @@ export function validateFileAccess(filePath, allowedDir) {
   const sanitized = sanitizePath(allowedDir, filePath);
 
   if (!fs.existsSync(sanitized)) {
-    throw new Error("Fichier introuvable");
+    throw new Error("File not found");
   }
 
   const stats = fs.statSync(sanitized);
   if (!stats.isFile()) {
-    throw new Error("Le chemin ne pointe pas vers un fichier");
+    throw new Error("Path does not point to a file");
   }
 
   return sanitized;

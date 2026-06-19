@@ -53,7 +53,7 @@ services:
 
   mongodb:
     container_name: drathos-db
-    image: mongo:4
+    image: mongo:4 # mongo:4 for hardware compatibility without AVX — replace with mongo:8 if your CPU supports it
     restart: unless-stopped
     deploy:
       resources:

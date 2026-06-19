@@ -6,7 +6,7 @@ export const handleValidationErrors = (req, res, next) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({
       error: true,
-      message: "Données invalides",
+      message: "Invalid data",
       details: errors.array(),
     });
   }
@@ -17,17 +17,15 @@ export const validateRegister = [
   body("username")
     .trim()
     .isLength({ min: 3, max: 30 })
-    .withMessage("Le nom d'utilisateur doit contenir entre 3 et 30 caractères")
+    .withMessage("Username must be between 3 and 30 characters")
     .matches(/^[a-zA-Z0-9_-]+$/)
-    .withMessage(
-      "Le nom d'utilisateur ne peut contenir que des lettres, chiffres, _ et -"
-    ),
+    .withMessage("Username can only contain letters, digits, _ and -"),
 
   body("password")
     .isLength({ min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH })
-    .withMessage(`Le mot de passe doit contenir entre ${PASSWORD_MIN_LENGTH} et ${PASSWORD_MAX_LENGTH} caractères`)
+    .withMessage(`Password must be between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters`)
     .matches(PASSWORD_REGEX)
-    .withMessage("Le mot de passe doit contenir au moins une minuscule, une majuscule, un chiffre et un caractère spécial (@$!%*?&)"),
+    .withMessage("Password must contain at least one lowercase letter, one uppercase letter, one digit and one special character (@$!%*?&)"),
 
   handleValidationErrors,
 ];
@@ -36,15 +34,15 @@ export const validateLogin = [
   body("username")
     .trim()
     .notEmpty()
-    .withMessage("Nom d'utilisateur requis")
+    .withMessage("Username is required")
     .isLength({ max: 30 })
-    .withMessage("Nom d'utilisateur trop long"),
+    .withMessage("Username too long"),
 
   body("password")
     .notEmpty()
-    .withMessage("Mot de passe requis")
+    .withMessage("Password is required")
     .isLength({ max: 128 })
-    .withMessage("Mot de passe trop long"),
+    .withMessage("Password too long"),
 
   handleValidationErrors,
 ];
@@ -54,39 +52,39 @@ export const validateAddGame = [
     .optional()
     .trim()
     .isLength({ min: 1, max: 200 })
-    .withMessage("Le titre doit contenir entre 1 et 200 caractères"),
+    .withMessage("Title must be between 1 and 200 characters"),
 
   body("description")
     .optional()
     .trim()
     .isLength({ max: 2000 })
-    .withMessage("La description ne peut pas dépasser 2000 caractères"),
+    .withMessage("Description cannot exceed 2000 characters"),
 
   body("version")
     .optional()
     .trim()
     .matches(/^\d+\.\d+\.\d+$/)
-    .withMessage("La version doit être au format x.y.z"),
+    .withMessage("Version must be in x.y.z format"),
 
   body("isPublic")
     .optional()
     .isBoolean()
-    .withMessage("isPublic doit être un booléen"),
+    .withMessage("isPublic must be a boolean"),
 
   body("multiplayer.enabled")
     .optional()
     .isBoolean()
-    .withMessage("multiplayer.enabled doit être un booléen"),
+    .withMessage("multiplayer.enabled must be a boolean"),
 
   body("multiplayer.type")
     .optional()
     .isIn(['online', 'local', 'both', null, ''])
-    .withMessage("multiplayer.type doit être 'online', 'local' ou 'both'"),
+    .withMessage("multiplayer.type must be 'online', 'local' or 'both'"),
 
   body("multiplayer.maxPlayers")
     .optional()
     .custom((value) => value === null || value === '' || (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 999))
-    .withMessage("multiplayer.maxPlayers doit être un nombre entre 1 et 999"),
+    .withMessage("multiplayer.maxPlayers must be a number between 1 and 999"),
 
   body("multiplayer.modes")
     .optional()
@@ -101,46 +99,46 @@ export const validateAddGame = [
       }
       return Array.isArray(value) && value.every(mode => ['co-op', 'pvp'].includes(mode));
     })
-    .withMessage("multiplayer.modes doit être un tableau contenant 'co-op' et/ou 'pvp'"),
+    .withMessage("multiplayer.modes must be an array containing 'co-op' and/or 'pvp'"),
 
   handleValidationErrors,
 ];
 
 export const validateUpdateGame = [
-  param("id").isMongoId().withMessage("ID de jeu invalide"),
+  param("id").isMongoId().withMessage("Invalid game ID"),
 
   body("title")
     .optional()
     .trim()
     .isLength({ min: 1, max: 200 })
-    .withMessage("Le titre doit contenir entre 1 et 200 caractères"),
+    .withMessage("Title must be between 1 and 200 characters"),
 
   body("description")
     .optional()
     .trim()
     .isLength({ max: 2000 })
-    .withMessage("La description ne peut pas dépasser 2000 caractères"),
+    .withMessage("Description cannot exceed 2000 characters"),
 
   handleValidationErrors,
 ];
 
 export const validateObjectId = [
-  param("id").isMongoId().withMessage("ID invalide"),
+  param("id").isMongoId().withMessage("Invalid ID"),
   handleValidationErrors,
 ];
 
 export const validateUserId = [
-  param("userId").isMongoId().withMessage("User ID invalide"),
+  param("userId").isMongoId().withMessage("Invalid user ID"),
   handleValidationErrors,
 ];
 
 export const validateRoleUpdate = [
-  param("userId").isMongoId().withMessage("User ID invalide"),
+  param("userId").isMongoId().withMessage("Invalid user ID"),
   body("role")
     .trim()
     .notEmpty()
-    .withMessage("Role requis")
+    .withMessage("Role is required")
     .isIn(Object.values(ROLES))
-    .withMessage(`Role invalide. Doit être: ${Object.values(ROLES).join(", ")}`),
+    .withMessage(`Invalid role. Must be one of: ${Object.values(ROLES).join(", ")}`),
   handleValidationErrors,
 ];

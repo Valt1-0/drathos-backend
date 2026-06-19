@@ -3,6 +3,7 @@ import {
   register,
   login,
   logout,
+  refreshAccessToken,
   getAllUsers,
   getUserProfile,
   updateProfileVisibility,
@@ -24,6 +25,7 @@ const router = express.Router();
 
 router.post("/register", authLimiter, validateRegister, register);
 router.post("/login", authLimiter, validateLogin, login);
+router.post("/refresh", authLimiter, refreshAccessToken);
 router.post("/logout", authMiddleware, logout);
 
 router.get("/profiles", authMiddleware, getAllUsers);
