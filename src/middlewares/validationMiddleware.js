@@ -107,17 +107,17 @@ export const validateAddGame = [
 export const validateUpdateGame = [
   param("id").isMongoId().withMessage("Invalid game ID"),
 
-  body("title")
+  body("name")
     .optional()
     .trim()
     .isLength({ min: 1, max: 200 })
-    .withMessage("Title must be between 1 and 200 characters"),
+    .withMessage("Name must be between 1 and 200 characters"),
 
-  body("description")
+  body("summary")
     .optional()
     .trim()
     .isLength({ max: 2000 })
-    .withMessage("Description cannot exceed 2000 characters"),
+    .withMessage("Summary cannot exceed 2000 characters"),
 
   handleValidationErrors,
 ];

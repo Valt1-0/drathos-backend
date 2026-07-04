@@ -317,7 +317,7 @@ export const updateGame = async (req, res) => {
       return res.status(400).json({ message: err.message });
     }
 
-    const { title, description, releaseDate, genre } = req.body;
+    const { name, summary, releaseDate } = req.body;
 
     try {
       const game = await Game.findById(req.params.id);
@@ -325,10 +325,9 @@ export const updateGame = async (req, res) => {
         return res.status(404).json({ message: "Game not found." });
       }
 
-      if (title) game.title = title.trim();
-      if (description) game.description = description.trim();
+      if (name) game.name = name.trim();
+      if (summary) game.summary = summary.trim();
       if (releaseDate) game.releaseDate = new Date(releaseDate);
-      if (genre) game.genres = [genre.toLowerCase()];
 
       if (req.file) {
         const { baseName: originalName, extension } = splitArchiveExtension(req.file.originalname);

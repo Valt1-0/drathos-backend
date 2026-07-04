@@ -93,14 +93,17 @@ const startServer = async () => {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
-    app.use("/serverData", (req, res, next) => {
+    // Only profile pictures are public — game/mod archives live under serverData
+    // too and must never be reachable without auth (they are streamed through
+    // the authenticated /api download routes instead).
+    app.use("/serverData/users", (req, res, next) => {
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("X-Frame-Options", "DENY");
       res.setHeader("Cache-Control", "public, max-age=3600");
       next();
-    }, express.static(path.join(__dirname, "serverData")));
+    }, express.static(path.join(__dirname, "serverData/users")));
 
     app.use(helmetConfig);
     app.use(corsConfig);
