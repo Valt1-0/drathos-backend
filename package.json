@@ -20,7 +20,7 @@
     "url": "https://github.com/Valt1-0/drathos-backend.git"
   },
   "overrides": {
-    "ws": "^8.20.1"
+    "ws": ">=8.20.2"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
