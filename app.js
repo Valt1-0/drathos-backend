@@ -136,7 +136,7 @@ const startServer = async () => {
     app.get("/", (req, res) => {
       res.json({
         message: "Drathos API Server",
-        version: "0.9.0",
+        version: "1.0.1",
         status: "running",
         timestamp: new Date().toISOString(),
       });
