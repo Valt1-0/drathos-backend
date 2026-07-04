@@ -525,7 +525,7 @@ export const downloadGame = async (req, res) => {
       });
     }
 
-    fileStream.on("error", (err) => {
+    fileStream.on("error", (_err) => {
       if (!res.headersSent) {
         res.status(500).json({ message: "Stream error." });
       }

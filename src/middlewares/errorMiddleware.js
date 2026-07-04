@@ -1,6 +1,7 @@
 import logger from "../utils/logger.js";
 
-export const errorHandler = (err, req, res, next) => {
+// Express identifies error handlers by their 4-argument signature — `_next` must stay
+export const errorHandler = (err, req, res, _next) => {
   logger.error({
     message: err.message,
     stack: err.stack,

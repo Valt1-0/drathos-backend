@@ -28,6 +28,7 @@ export function validateFileName(filename) {
     throw new Error("Invalid filename");
   }
 
+  // eslint-disable-next-line no-control-regex -- control chars are deliberately rejected in filenames
   const forbiddenChars = /[<>:"|?*\x00-\x1F]/g;
   if (forbiddenChars.test(filename)) {
     throw new Error("Filename contains forbidden characters");

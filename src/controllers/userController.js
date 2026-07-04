@@ -1,7 +1,7 @@
 import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
 import { revokeToken } from "../middlewares/authMiddleware.js";
-import { ROLES, JWT_EXPIRES_IN, REFRESH_TOKEN_EXPIRES_IN, MAX_PROFILE_PIC_SIZE } from "../utils/constants.js";
+import { ROLES, JWT_EXPIRES_IN, MAX_PROFILE_PIC_SIZE } from "../utils/constants.js";
 import crypto from "crypto";
 import User from "../models/userModel.js";
 import InstalledGame from "../models/installedGameModel.js";
