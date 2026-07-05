@@ -5,6 +5,9 @@ import { ROLES, JWT_EXPIRES_IN, MAX_PROFILE_PIC_SIZE } from "../utils/constants.
 import crypto from "crypto";
 import User from "../models/userModel.js";
 import InstalledGame from "../models/installedGameModel.js";
+import InvitationCode from "../models/invitationCodeModel.js";
+import ServerSettings from "../models/serverSettingsModel.js";
+import { getSettings } from "../utils/serverSettings.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
@@ -142,8 +145,9 @@ export const uploadMiddleware = multer({
 }).single("profilePicture");
 
 export const register = async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, inviteCode } = req.body;
 
+  let claimedInvite = null;
   try {
     if (await User.exists({ username })) {
       return res
@@ -151,12 +155,61 @@ export const register = async (req, res) => {
         .json({ error: true, message: "User already exists" });
     }
 
+    const settings = await getSettings();
     const isFirstUser = (await User.countDocuments()) === 0;
-    const user = await User.create({
-      username,
-      password,
-      role: isFirstUser ? "admin" : "member",
-    });
+
+    // Closed registration: require a valid invitation code (bootstrap of the
+    // very first account is always allowed so a fresh server can be set up).
+    if (!isFirstUser && settings.registrationEnabled === false) {
+      const code = typeof inviteCode === "string" ? inviteCode.trim().toUpperCase() : "";
+      if (!code) {
+        return res.status(403).json({
+          error: true,
+          code: "REGISTRATION_DISABLED",
+          message: "Registration is disabled on this server. An invitation code is required.",
+        });
+      }
+      // Atomic claim — two concurrent registrations can never consume the same code
+      claimedInvite = await InvitationCode.findOneAndUpdate(
+        {
+          code,
+          usedAt: null,
+          $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+        },
+        { $set: { usedAt: new Date() } },
+        { new: true }
+      );
+      if (!claimedInvite) {
+        return res.status(403).json({
+          error: true,
+          code: "INVALID_INVITE",
+          message: "Invalid, expired or already used invitation code.",
+        });
+      }
+    }
+
+    // Admin bootstrap: atomic flag flip so two concurrent registrations on a
+    // fresh server cannot both become admin — only the winner gets the role.
+    let role = "member";
+    if (isFirstUser) {
+      // Atomic election on the singleton settings doc (guaranteed to exist via
+      // getSettings above). Only the registration that flips the flag from unset
+      // matches the filter and gets a non-null result — the loser gets null.
+      const won = await ServerSettings.findOneAndUpdate(
+        { key: "singleton", adminBootstrapped: { $ne: true } },
+        { $set: { adminBootstrapped: true } }
+      );
+      if (won) role = "admin";
+    }
+
+    const user = await User.create({ username, password, role });
+
+    if (claimedInvite) {
+      await InvitationCode.updateOne(
+        { _id: claimedInvite._id },
+        { $set: { usedBy: user._id } }
+      ).catch(() => {});
+    }
 
     const refreshToken = generateRefreshToken();
     const [token] = await Promise.all([
@@ -166,6 +219,13 @@ export const register = async (req, res) => {
 
     res.json({ token, refreshToken, message: "User registered successfully" });
   } catch (err) {
+    // Release the claimed code if user creation failed after the claim
+    if (claimedInvite) {
+      await InvitationCode.updateOne(
+        { _id: claimedInvite._id },
+        { $set: { usedAt: null, usedBy: null } }
+      ).catch(() => {});
+    }
     logger.error("[userController] register error:", err.message);
     res.status(500).json({ message: "Server error" });
   }

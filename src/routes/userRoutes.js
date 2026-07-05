@@ -17,7 +17,13 @@ import {
   validateLogin,
   validateUserId,
   validateRoleUpdate,
+  validateInvitationId,
 } from "../middlewares/validationMiddleware.js";
+import {
+  createInvitation,
+  listInvitations,
+  deleteInvitation,
+} from "../controllers/invitationController.js";
 import { authMiddleware, requireAdminOrModerator } from "../middlewares/authMiddleware.js";
 import { authLimiter } from "../middlewares/rateLimitMiddleware.js";
 
@@ -52,6 +58,10 @@ router.post(
 );
 
 router.delete("/profile/picture", authMiddleware, deleteProfilePicture);
+
+router.post("/invitations", authMiddleware, requireAdminOrModerator, createInvitation);
+router.get("/invitations", authMiddleware, requireAdminOrModerator, listInvitations);
+router.delete("/invitations/:id", authMiddleware, requireAdminOrModerator, validateInvitationId, deleteInvitation);
 
 router.patch("/:userId/role", authMiddleware, requireAdminOrModerator, validateRoleUpdate, updateUserRole);
 

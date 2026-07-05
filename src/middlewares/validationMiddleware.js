@@ -27,6 +27,12 @@ export const validateRegister = [
     .matches(PASSWORD_REGEX)
     .withMessage("Password must contain at least one lowercase letter, one uppercase letter, one digit and one special character (@$!%*?&)"),
 
+  body("inviteCode")
+    .optional()
+    .trim()
+    .isLength({ max: 32 })
+    .withMessage("Invitation code too long"),
+
   handleValidationErrors,
 ];
 
@@ -129,6 +135,11 @@ export const validateObjectId = [
 
 export const validateUserId = [
   param("userId").isMongoId().withMessage("Invalid user ID"),
+  handleValidationErrors,
+];
+
+export const validateInvitationId = [
+  param("id").isMongoId().withMessage("Invalid invitation ID"),
   handleValidationErrors,
 ];
 

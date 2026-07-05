@@ -31,8 +31,11 @@ export const getServerHealth = async (req, res) => {
 export const getServerStatus = async (req, res) => {
   try {
     const uptime = process.uptime();
+    // Public flag so the registration screen can ask for an invitation code up front
+    const settings = await getSettings().catch(() => null);
     const status = {
       status: "online",
+      registrationEnabled: settings ? settings.registrationEnabled !== false : true,
       uptime: formatUptime(uptime),
       uptimeSeconds: Math.floor(uptime),
       message: "Server is running ...",
@@ -57,6 +60,7 @@ export const getServerSettings = async (req, res) => {
       settings: {
         maxModSizeGB: settings.maxModSizeGB,
         maxGameSizeGB: settings.maxGameSizeGB,
+        registrationEnabled: settings.registrationEnabled !== false,
       },
     });
   } catch (error) {
@@ -67,10 +71,17 @@ export const getServerSettings = async (req, res) => {
 
 export const patchServerSettings = async (req, res) => {
   try {
-    const { maxModSizeGB, maxGameSizeGB } = req.body;
+    const { maxModSizeGB, maxGameSizeGB, registrationEnabled } = req.body;
 
     const current = await getSettings();
     const patch = {};
+
+    if (registrationEnabled !== undefined) {
+      if (typeof registrationEnabled !== "boolean") {
+        return res.status(400).json({ error: true, message: "registrationEnabled must be a boolean." });
+      }
+      patch.registrationEnabled = registrationEnabled;
+    }
 
     if (maxModSizeGB !== undefined) {
       const v = Number(maxModSizeGB);
@@ -133,6 +144,7 @@ export const patchServerSettings = async (req, res) => {
       settings: {
         maxModSizeGB: updated.maxModSizeGB,
         maxGameSizeGB: updated.maxGameSizeGB,
+        registrationEnabled: updated.registrationEnabled !== false,
       },
       ...(warnings.length > 0 && { warnings }),
     });
