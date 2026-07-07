@@ -158,8 +158,8 @@ export const register = async (req, res) => {
     const settings = await getSettings();
     const isFirstUser = (await User.countDocuments()) === 0;
 
-    // Closed registration: require a valid invitation code (bootstrap of the
-    // very first account is always allowed so a fresh server can be set up).
+    // Closed registration requires a valid code (the very first account is
+    // always allowed so a fresh server can be set up).
     if (!isFirstUser && settings.registrationEnabled === false) {
       const code = typeof inviteCode === "string" ? inviteCode.trim().toUpperCase() : "";
       if (!code) {
@@ -169,7 +169,7 @@ export const register = async (req, res) => {
           message: "Registration is disabled on this server. An invitation code is required.",
         });
       }
-      // Atomic claim — two concurrent registrations can never consume the same code
+      // Atomic claim — concurrent registrations can't consume the same code
       claimedInvite = await InvitationCode.findOneAndUpdate(
         {
           code,
@@ -188,13 +188,10 @@ export const register = async (req, res) => {
       }
     }
 
-    // Admin bootstrap: atomic flag flip so two concurrent registrations on a
-    // fresh server cannot both become admin — only the winner gets the role.
+    // Atomic admin election: only the registration that flips the flag on the
+    // singleton doc wins (non-null result); a concurrent one gets null.
     let role = "member";
     if (isFirstUser) {
-      // Atomic election on the singleton settings doc (guaranteed to exist via
-      // getSettings above). Only the registration that flips the flag from unset
-      // matches the filter and gets a non-null result — the loser gets null.
       const won = await ServerSettings.findOneAndUpdate(
         { key: "singleton", adminBootstrapped: { $ne: true } },
         { $set: { adminBootstrapped: true } }
@@ -219,7 +216,7 @@ export const register = async (req, res) => {
 
     res.json({ token, refreshToken, message: "User registered successfully" });
   } catch (err) {
-    // Release the claimed code if user creation failed after the claim
+    // Release the code if user creation failed after claiming it
     if (claimedInvite) {
       await InvitationCode.updateOne(
         { _id: claimedInvite._id },

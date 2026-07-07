@@ -6,19 +6,15 @@ let cache = null;
 let cacheTime = 0;
 let migrated = false;
 
-// One-time adoption of a pre-key settings document (upgrade path): stamp the
-// existing customized doc with the singleton key so the upsert below reuses it
-// instead of creating a fresh default one and resetting the admin's limits.
+// Upgrade path: adopt a pre-key doc so the upsert below reuses it instead of
+// creating a fresh default one and resetting the admin's limits.
 async function migrateLegacyDoc() {
   if (migrated) return;
   migrated = true;
   try {
-    await ServerSettings.updateOne(
-      { key: { $exists: false } },
-      { $set: { key: "singleton" } }
-    );
+    await ServerSettings.updateOne({ key: { $exists: false } }, { $set: { key: "singleton" } });
   } catch {
-    // Already adopted or none present — safe to ignore
+    // Already adopted or none present
   }
 }
 
@@ -27,8 +23,6 @@ export async function getSettings() {
 
   await migrateLegacyDoc();
 
-  // Atomic upsert on the fixed key — concurrent first reads converge on one doc
-  // (the unique index rejects duplicates) instead of racing findOne + create.
   const settings = await ServerSettings.findOneAndUpdate(
     { key: "singleton" },
     { $setOnInsert: { key: "singleton" } },

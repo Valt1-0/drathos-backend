@@ -2,7 +2,7 @@ import crypto from "crypto";
 import logger from "../utils/logger.js";
 import InvitationCode from "../models/invitationCodeModel.js";
 
-// Readable alphabet without ambiguous characters (0/O, 1/I/L)
+// No ambiguous characters (0/O, 1/I/L)
 const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const MAX_ACTIVE_CODES = 100;
 
@@ -39,7 +39,6 @@ export const createInvitation = async (req, res) => {
       });
     }
 
-    // Retry on the (unlikely) unique collision
     let invitation = null;
     for (let attempt = 0; attempt < 3 && !invitation; attempt++) {
       try {

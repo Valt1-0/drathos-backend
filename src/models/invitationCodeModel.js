@@ -1,8 +1,6 @@
 import mongoose from "mongoose";
 
-// Single-use invitation codes for registering while registration is disabled.
-// A code is consumed atomically (usedAt set via findOneAndUpdate) so two
-// concurrent registrations can never share one.
+// Single-use codes for registering while registration is disabled.
 const InvitationCodeSchema = new mongoose.Schema(
   {
     code: { type: String, required: true, unique: true },
