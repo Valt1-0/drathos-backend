@@ -147,6 +147,18 @@ describe("validateMagicBytes", () => {
     expect(validateMagicBytes(p, ".gz")).toBe(true);
   });
 
+  it("accepts a real xz signature (incl. .tar.xz / .txz)", () => {
+    const p = writeTmp("ok.xz", [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00]);
+    expect(validateMagicBytes(p, ".xz")).toBe(true);
+    expect(validateMagicBytes(p, ".tar.xz")).toBe(true);
+    expect(validateMagicBytes(p, ".txz")).toBe(true);
+  });
+
+  it("rejects a non-xz file disguised as .xz", () => {
+    const p = writeTmp("fake.xz", [0x50, 0x4b, 0x03, 0x04]); // a zip
+    expect(validateMagicBytes(p, ".xz")).toBe(false);
+  });
+
   it("rejects an executable renamed to .zip", () => {
     // MZ header (Windows PE) disguised as a zip
     const p = writeTmp("fake.zip", [0x4d, 0x5a, 0x90, 0x00]);

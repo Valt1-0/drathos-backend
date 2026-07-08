@@ -76,13 +76,23 @@ export function validateFileAccess(filePath, allowedDir) {
 export function validateMagicBytes(filePath, extension) {
   const lowerExt = extension.toLowerCase();
 
+  const XZ = { bytes: [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00], offset: 0 }; // ýz XZ
+  const GZ = { bytes: [0x1f, 0x8b], offset: 0 };                          // gzip
+  const BZ = { bytes: [0x42, 0x5a, 0x68], offset: 0 };                    // BZh
+
   const SIGNATURES = {
     ".zip": { bytes: [0x50, 0x4b], offset: 0 },            // PK
     ".7z":  { bytes: [0x37, 0x7a, 0xbc, 0xaf], offset: 0 }, // 7z¼¯
     ".rar": { bytes: [0x52, 0x61, 0x72, 0x21], offset: 0 }, // Rar!
-    ".gz":  { bytes: [0x1f, 0x8b], offset: 0 },              // gzip
-    ".tgz": { bytes: [0x1f, 0x8b], offset: 0 },
-    ".bz2": { bytes: [0x42, 0x5a, 0x68], offset: 0 },        // BZh
+    ".gz":  GZ,
+    ".tgz": GZ,
+    ".tar.gz": GZ,
+    ".bz2": BZ,
+    ".tbz2": BZ,
+    ".tar.bz2": BZ,
+    ".xz":  XZ,
+    ".txz": XZ,
+    ".tar.xz": XZ,
   };
 
   const rule = SIGNATURES[lowerExt];
