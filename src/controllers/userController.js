@@ -169,21 +169,23 @@ export const register = async (req, res) => {
           message: "Registration is disabled on this server. An invitation code is required.",
         });
       }
-      // Atomic claim — concurrent registrations can't consume the same code
+      // Atomically reserve a slot only while under maxUses — concurrent
+      // registrations can never push a code past its limit.
       claimedInvite = await InvitationCode.findOneAndUpdate(
         {
           code,
-          usedAt: null,
+          revoked: { $ne: true },
+          $expr: { $lt: ["$usedCount", "$maxUses"] },
           $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
         },
-        { $set: { usedAt: new Date() } },
+        { $inc: { usedCount: 1 } },
         { new: true }
       );
       if (!claimedInvite) {
         return res.status(403).json({
           error: true,
           code: "INVALID_INVITE",
-          message: "Invalid, expired or already used invitation code.",
+          message: "Invalid, expired, revoked or fully used invitation code.",
         });
       }
     }
@@ -204,7 +206,7 @@ export const register = async (req, res) => {
     if (claimedInvite) {
       await InvitationCode.updateOne(
         { _id: claimedInvite._id },
-        { $set: { usedBy: user._id } }
+        { $push: { uses: { user: user._id, usedAt: new Date() } } }
       ).catch(() => {});
     }
 
@@ -216,11 +218,11 @@ export const register = async (req, res) => {
 
     res.json({ token, refreshToken, message: "User registered successfully" });
   } catch (err) {
-    // Release the code if user creation failed after claiming it
+    // Release the reserved slot if user creation failed after claiming it
     if (claimedInvite) {
       await InvitationCode.updateOne(
         { _id: claimedInvite._id },
-        { $set: { usedAt: null, usedBy: null } }
+        { $inc: { usedCount: -1 } }
       ).catch(() => {});
     }
     logger.error("[userController] register error:", err.message);

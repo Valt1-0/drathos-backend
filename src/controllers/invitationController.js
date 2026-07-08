@@ -13,9 +13,11 @@ const generateCode = () => {
   return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
 };
 
+const MAX_USES_LIMIT = 100;
+
 export const createInvitation = async (req, res) => {
   try {
-    const { expiresInDays } = req.body;
+    const { expiresInDays, maxUses } = req.body;
 
     let expiresAt = null;
     if (expiresInDays !== undefined && expiresInDays !== null) {
@@ -28,8 +30,20 @@ export const createInvitation = async (req, res) => {
       expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
+    let uses = 1;
+    if (maxUses !== undefined && maxUses !== null) {
+      uses = Number(maxUses);
+      if (!Number.isInteger(uses) || uses < 1 || uses > MAX_USES_LIMIT) {
+        return res.status(400).json({
+          error: true,
+          message: `maxUses must be an integer between 1 and ${MAX_USES_LIMIT}.`,
+        });
+      }
+    }
+
     const activeCount = await InvitationCode.countDocuments({
-      usedAt: null,
+      revoked: { $ne: true },
+      $expr: { $lt: ["$usedCount", "$maxUses"] },
       $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
     });
     if (activeCount >= MAX_ACTIVE_CODES) {
@@ -46,6 +60,7 @@ export const createInvitation = async (req, res) => {
           code: generateCode(),
           createdBy: req.user.id,
           expiresAt,
+          maxUses: uses,
         });
       } catch (err) {
         if (err.code !== 11000) throw err;
@@ -55,7 +70,7 @@ export const createInvitation = async (req, res) => {
       return res.status(500).json({ error: true, message: "Could not generate a unique code." });
     }
 
-    logger.info(`[invitations] Code created by ${req.user.username} (expires: ${expiresAt ?? "never"})`);
+    logger.info(`[invitations] Code created by ${req.user.username} (maxUses: ${uses}, expires: ${expiresAt ?? "never"})`);
 
     res.status(201).json({
       error: false,
@@ -64,6 +79,9 @@ export const createInvitation = async (req, res) => {
         code: invitation.code,
         expiresAt: invitation.expiresAt,
         createdAt: invitation.createdAt,
+        maxUses: invitation.maxUses,
+        usedCount: 0,
+        uses: [],
       },
     });
   } catch (error) {
@@ -72,13 +90,20 @@ export const createInvitation = async (req, res) => {
   }
 };
 
+const statusOf = (inv, now) => {
+  if (inv.revoked) return "revoked";
+  if ((inv.usedCount || 0) >= inv.maxUses) return "used";
+  if (inv.expiresAt && inv.expiresAt.getTime() < now) return "expired";
+  return "active";
+};
+
 export const listInvitations = async (req, res) => {
   try {
     const invitations = await InvitationCode.find()
       .sort({ createdAt: -1 })
       .limit(200)
       .populate("createdBy", "username")
-      .populate("usedBy", "username")
+      .populate("uses.user", "username")
       .lean();
 
     const now = Date.now();
@@ -90,13 +115,13 @@ export const listInvitations = async (req, res) => {
         createdAt: inv.createdAt,
         createdBy: inv.createdBy?.username ?? null,
         expiresAt: inv.expiresAt,
-        usedAt: inv.usedAt,
-        usedBy: inv.usedBy?.username ?? null,
-        status: inv.usedAt
-          ? "used"
-          : inv.expiresAt && inv.expiresAt.getTime() < now
-            ? "expired"
-            : "active",
+        maxUses: inv.maxUses,
+        usedCount: inv.usedCount || 0,
+        uses: (inv.uses || []).map((u) => ({
+          username: u.user?.username ?? null,
+          usedAt: u.usedAt,
+        })),
+        status: statusOf(inv, now),
       })),
     });
   } catch (error) {
@@ -105,22 +130,29 @@ export const listInvitations = async (req, res) => {
   }
 };
 
+// Never used → hard delete. Already used → revoke (disable further use) while
+// keeping the usage history for audit.
 export const deleteInvitation = async (req, res) => {
   try {
     const invitation = await InvitationCode.findById(req.params.id);
     if (!invitation) {
       return res.status(404).json({ error: true, message: "Invitation code not found." });
     }
-    if (invitation.usedAt) {
-      return res
-        .status(400)
-        .json({ error: true, message: "Used codes cannot be deleted (kept for audit)." });
+
+    if ((invitation.usedCount || 0) === 0 && (invitation.uses || []).length === 0) {
+      await InvitationCode.deleteOne({ _id: invitation._id });
+      logger.info(`[invitations] Code ${invitation.code} deleted by ${req.user.username}`);
+      return res.json({ error: false, message: "Invitation code deleted.", deleted: true });
     }
 
-    await InvitationCode.deleteOne({ _id: invitation._id });
-    logger.info(`[invitations] Code ${invitation.code} revoked by ${req.user.username}`);
+    if (invitation.revoked) {
+      return res.json({ error: false, message: "Invitation code already revoked.", deleted: false });
+    }
 
-    res.json({ error: false, message: "Invitation code revoked." });
+    invitation.revoked = true;
+    await invitation.save();
+    logger.info(`[invitations] Code ${invitation.code} revoked by ${req.user.username}`);
+    res.json({ error: false, message: "Invitation code revoked.", deleted: false });
   } catch (error) {
     logger.error("[invitations] delete error:", error.message);
     res.status(500).json({ error: true, message: "Error deleting invitation code." });

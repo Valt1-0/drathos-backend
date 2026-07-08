@@ -103,6 +103,88 @@ describe("registration + invitation flow", () => {
     expect(second.body.code).toBe("INVALID_INVITE");
   });
 
+  it("honors maxUses and records who used the code", async () => {
+    const created = await request(app)
+      .post("/api/users/invitations")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ maxUses: 2 });
+    expect(created.status).toBe(201);
+    expect(created.body.invitation.maxUses).toBe(2);
+    const code = created.body.invitation.code;
+
+    const u1 = await request(app)
+      .post("/api/users/register")
+      .send({ username: "multi1", password: validPassword, inviteCode: code });
+    const u2 = await request(app)
+      .post("/api/users/register")
+      .send({ username: "multi2", password: validPassword, inviteCode: code });
+    expect(u1.status).toBe(200);
+    expect(u2.status).toBe(200);
+
+    // Third use exceeds maxUses
+    const u3 = await request(app)
+      .post("/api/users/register")
+      .send({ username: "multi3", password: validPassword, inviteCode: code });
+    expect(u3.status).toBe(403);
+    expect(u3.body.code).toBe("INVALID_INVITE");
+
+    const list = await request(app)
+      .get("/api/users/invitations")
+      .set("Authorization", `Bearer ${adminToken}`);
+    const entry = list.body.invitations.find((i) => i.code === code);
+    expect(entry.usedCount).toBe(2);
+    expect(entry.status).toBe("used");
+    expect(entry.uses.map((u) => u.username).sort()).toEqual(["multi1", "multi2"]);
+  });
+
+  it("never exceeds maxUses under concurrent registrations", async () => {
+    const created = await request(app)
+      .post("/api/users/invitations")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ maxUses: 3 });
+    const code = created.body.invitation.code;
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        request(app)
+          .post("/api/users/register")
+          .send({ username: `race_multi_${i}`, password: validPassword, inviteCode: code })
+      )
+    );
+    const ok = results.filter((r) => r.status === 200).length;
+    expect(ok).toBe(3);
+
+    const list = await request(app)
+      .get("/api/users/invitations")
+      .set("Authorization", `Bearer ${adminToken}`);
+    const entry = list.body.invitations.find((i) => i.code === code);
+    expect(entry.usedCount).toBe(3);
+  });
+
+  it("revokes a used code (keeps history) and blocks further use", async () => {
+    const created = await request(app)
+      .post("/api/users/invitations")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ maxUses: 5 });
+    const code = created.body.invitation.code;
+    const id = created.body.invitation._id;
+
+    await request(app)
+      .post("/api/users/register")
+      .send({ username: "beforerevoke", password: validPassword, inviteCode: code });
+
+    const del = await request(app)
+      .delete(`/api/users/invitations/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(del.status).toBe(200);
+    expect(del.body.deleted).toBe(false);
+
+    const after = await request(app)
+      .post("/api/users/register")
+      .send({ username: "afterrevoke", password: validPassword, inviteCode: code });
+    expect(after.status).toBe(403);
+  });
+
   it("rejects a made-up invite code", async () => {
     const res = await request(app)
       .post("/api/users/register")
