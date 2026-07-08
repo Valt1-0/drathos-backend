@@ -58,7 +58,7 @@ Drathos Backend is the **REST API + WebSocket server** powering the Drathos gami
 | ---------- | -------------------------------- |
 | Runtime    | Node.js 22                       |
 | Framework  | Express.js v5                    |
-| Database   | MongoDB 4 + Mongoose             |
+| Database   | MongoDB 8 + Mongoose             |
 | Real-time  | Socket.IO v4                     |
 | Auth       | JWT + bcrypt                     |
 | Security   | Helmet, express-rate-limit, CORS |
@@ -72,7 +72,7 @@ Drathos Backend is the **REST API + WebSocket server** powering the Drathos gami
 ### Prerequisites
 
 - Node.js 22+
-- MongoDB **4** — MongoDB 5.0+ requires AVX CPU instructions, which many home servers and older machines lack. MongoDB 4 runs on any x86-64 hardware.
+- MongoDB **8** (default). It requires AVX CPU instructions (as does any MongoDB 5.0+). On older/low-power hardware without AVX, fall back to **MongoDB 4** — but note it is end-of-life and no longer receives security fixes. To use it, set `image: mongo:4` in `docker-compose.yml` and change the healthcheck from `mongosh` to the legacy `mongo` shell.
 
 ### Installation
 

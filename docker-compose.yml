@@ -53,7 +53,9 @@ services:
 
   mongodb:
     container_name: drathos-db
-    image: mongo:4 # mongo:4 for hardware compatibility without AVX — replace with mongo:8 if your CPU supports it
+    # mongo:8 is the supported default. On CPUs without AVX (mongo:5+ requires it),
+    # fall back to `mongo:4` AND change the healthcheck below from `mongosh` to `mongo`.
+    image: mongo:8
     restart: unless-stopped
     deploy:
       resources:
@@ -72,7 +74,8 @@ services:
     networks:
       - drathos_network
     healthcheck:
-      test: ["CMD", "mongo", "-u", "${MONGO_ROOT_USERNAME}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      # mongo:4 fallback: replace `mongosh` with `mongo` (the legacy shell was removed in mongo:6)
+      test: ["CMD", "mongosh", "-u", "${MONGO_ROOT_USERNAME}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
