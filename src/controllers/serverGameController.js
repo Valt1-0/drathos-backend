@@ -18,6 +18,7 @@ import {
   cleanFileName,
   validateMagicBytes,
 } from "../utils/pathValidator.js";
+import { sha256File } from "../utils/fileHash.js";
 
 import { emitGameAdded } from "../socket.js";
 import { getSettings } from "../utils/serverSettings.js";
@@ -147,6 +148,8 @@ export const addGame = async (req, res) => {
       if (fs.existsSync(safePath)) fs.unlinkSync(safePath);
       fs.renameSync(req.file.path, safePath);
 
+      const sha256 = await sha256File(safePath);
+
       const newGame = new Game({
         name: gameData.name,
         summary: gameData.summary || "",
@@ -168,6 +171,7 @@ export const addGame = async (req, res) => {
         zipFilePath: safePath,
         version: version || "1.0.0",
         sizeMB: +(req.file.size / (1024 * 1024)).toFixed(2),
+        sha256,
         isPublic: isPublic !== undefined ? isPublic : true,
         multiplayer: multiplayer
           ? (() => {
@@ -358,6 +362,7 @@ export const updateGame = async (req, res) => {
         game.zipFileName = filename;
         game.zipFilePath = newPath;
         game.sizeMB = +(req.file.size / (1024 * 1024)).toFixed(2);
+        game.sha256 = await sha256File(newPath);
       }
       await game.save();
       res.status(200).json({ message: "Game updated successfully.", game });
@@ -482,6 +487,14 @@ export const downloadGame = async (req, res) => {
 
     if (!fs.existsSync(safePath)) {
       return res.status(404).json({ message: "File not found." });
+    }
+
+    // Lazy backfill for games uploaded before checksums existed — compute once
+    // in the background so the client can verify future downloads. Non-blocking.
+    if (!game.sha256) {
+      sha256File(safePath)
+        .then((sha256) => Game.updateOne({ _id: game._id }, { sha256 }))
+        .catch((err) => logger.warn(`[downloadGame] checksum backfill failed: ${err.message}`));
     }
 
     const stat = fs.statSync(safePath);

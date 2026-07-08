@@ -23,6 +23,7 @@ const ServerGameSchema = new mongoose.Schema({
 
   zipFileName: { type: String, required: true },
   zipFilePath: { type: String, required: true },
+  sha256: { type: String, default: null },
   version: { type: String, default: "1.0.0" },
   sizeMB: { type: Number },
   isPublic: { type: Boolean, default: true },
