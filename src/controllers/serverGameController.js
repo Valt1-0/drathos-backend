@@ -17,7 +17,9 @@ import {
   validateFileAccess,
   cleanFileName,
   validateMagicBytes,
+  hasAllowedArchiveExtension,
 } from "../utils/pathValidator.js";
+import { scheduleTempCleanup } from "../utils/tempCleanup.js";
 import { sha256File } from "../utils/fileHash.js";
 
 import { emitGameAdded } from "../socket.js";
@@ -50,7 +52,7 @@ if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 }
 
-const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz"];
+scheduleTempCleanup(TEMP_UPLOAD_DIR, "games");
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -63,10 +65,8 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const { extension: ext } = splitArchiveExtension(file.originalname);
-  const singleExt = path.extname(file.originalname).toLowerCase();
-  if (!allowedExtensions.includes(ext) && !allowedExtensions.includes(singleExt)) {
-    return cb(new Error("Only compressed files are allowed."), false);
+  if (!hasAllowedArchiveExtension(file.originalname)) {
+    return cb(new Error("Only compressed archive files are allowed."), false);
   }
   cb(null, true);
 };
@@ -109,6 +109,9 @@ export const addGame = async (req, res) => {
     const { version, isPublic, multiplayer, igdbId, executableName } = req.body;
 
     if (!igdbId) {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      }
       return res.status(400).json({ error: true, message: "Missing IGDB ID." });
     }
 
@@ -120,6 +123,17 @@ export const addGame = async (req, res) => {
 
     try {
       const gameData = await fetchGameDetails(igdbId);
+      const uploadVersion = version || "1.0.0";
+
+      // Reject duplicates before touching the disk — the unique index would
+      // only fire after the existing archive was already replaced.
+      if (await Game.exists({ igdbId: gameData.id, version: uploadVersion })) {
+        try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+        return res.status(409).json({
+          error: true,
+          message: "This game already exists on the server (same IGDB ID and version).",
+        });
+      }
 
       const genreIds = (gameData.genres || []).map((g) => g.id);
       const genres = await fetchGenresByIds(genreIds);
@@ -130,8 +144,10 @@ export const addGame = async (req, res) => {
 
       const { baseName: originalName, extension } = splitArchiveExtension(req.file.originalname);
 
+      // igdbId + version in the stored name so two games/versions can never
+      // overwrite each other's archive (and invalidate its sha256)
       const cleanName = cleanFileName(originalName);
-      const filename = `${cleanName}${extension}`;
+      const filename = `${cleanName}_${gameData.id}_v${uploadVersion}${extension}`;
 
       validateFileName(filename);
 
@@ -144,7 +160,6 @@ export const addGame = async (req, res) => {
       }
 
       const safePath = sanitizePath(GAME_FILES_DIR, filename);
-      // Same name = same game + same version → overwrite
       if (fs.existsSync(safePath)) fs.unlinkSync(safePath);
       fs.renameSync(req.file.path, safePath);
 
@@ -169,7 +184,7 @@ export const addGame = async (req, res) => {
         publisher: publisher || null,
         zipFileName: filename,
         zipFilePath: safePath,
-        version: version || "1.0.0",
+        version: uploadVersion,
         sizeMB: +(req.file.size / (1024 * 1024)).toFixed(2),
         sha256,
         isPublic: isPublic !== undefined ? isPublic : true,
@@ -326,6 +341,9 @@ export const updateGame = async (req, res) => {
     try {
       const game = await Game.findById(req.params.id);
       if (!game) {
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+          try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+        }
         return res.status(404).json({ message: "Game not found." });
       }
 
@@ -336,7 +354,7 @@ export const updateGame = async (req, res) => {
       if (req.file) {
         const { baseName: originalName, extension } = splitArchiveExtension(req.file.originalname);
         const cleanName = cleanFileName(originalName);
-        const filename = `${cleanName}${extension}`;
+        const filename = `${cleanName}_${game.igdbId}_v${game.version || "1.0.0"}${extension}`;
 
         validateFileName(filename);
 
@@ -409,10 +427,6 @@ export const deleteGame = async (req, res) => {
       });
     }
 
-    const deletedInstalled = await InstalledGame.deleteMany({
-      serverGameId: gameId,
-    });
-
     await Game.findByIdAndDelete(gameId);
 
     let fileDeletedSuccessfully = false;
@@ -439,7 +453,6 @@ export const deleteGame = async (req, res) => {
         zipFileName: game.zipFileName,
       },
       cleanup: {
-        installationsDeleted: deletedInstalled.deletedCount,
         fileDeleted: fileDeletedSuccessfully,
         fileError: fileErrorDetails,
       },
@@ -513,9 +526,21 @@ export const downloadGame = async (req, res) => {
     let fileStream;
 
     if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!match || (match[1] === "" && match[2] === "")) {
+        res.setHeader("Content-Range", `bytes */${fileSize}`);
+        return res.status(416).json({ message: "Range not satisfiable." });
+      }
+
+      let start, end;
+      if (match[1] === "") {
+        // Suffix form "bytes=-N": the last N bytes
+        start = Math.max(0, fileSize - parseInt(match[2], 10));
+        end = fileSize - 1;
+      } else {
+        start = parseInt(match[1], 10);
+        end = match[2] === "" ? fileSize - 1 : parseInt(match[2], 10);
+      }
 
       if (start >= fileSize || end >= fileSize || start > end) {
         res.setHeader("Content-Range", `bytes */${fileSize}`);

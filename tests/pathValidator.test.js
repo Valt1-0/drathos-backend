@@ -8,6 +8,7 @@ import {
   validateFileAccess,
   validateMagicBytes,
   cleanFileName,
+  ALLOWED_ARCHIVE_EXTENSIONS,
 } from "../src/utils/pathValidator.js";
 
 // Real temp directories: sanitizePath resolves symlinks on the base dir,
@@ -69,6 +70,13 @@ describe("validateFileName", () => {
   it("accepts a clean archive filename", () => {
     expect(validateFileName("hollow_knight.zip")).toBe("hollow_knight.zip");
     expect(validateFileName("game.tar.gz")).toBe("game.tar.gz");
+  });
+
+  it("accepts every extension the multer filters accept", () => {
+    // A file accepted at upload must never be rejected here post-transfer
+    for (const ext of ALLOWED_ARCHIVE_EXTENSIONS) {
+      expect(validateFileName(`game_1234_v1.0.0${ext}`)).toBe(`game_1234_v1.0.0${ext}`);
+    }
   });
 
   it("rejects empty or non-string input", () => {

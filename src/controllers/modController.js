@@ -13,7 +13,9 @@ import {
   validateFileAccess,
   validateMagicBytes,
   cleanFileName,
+  hasAllowedArchiveExtension,
 } from "../utils/pathValidator.js";
+import { scheduleTempCleanup } from "../utils/tempCleanup.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,28 +33,7 @@ if (!fs.existsSync(TEMP_UPLOAD_DIR)) {
   fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
 }
 
-const cleanupTempFiles = () => {
-  try {
-    const now = Date.now();
-    const MAX_AGE_MS = 24 * 60 * 60 * 1000;
-    for (const file of fs.readdirSync(TEMP_UPLOAD_DIR)) {
-      const filePath = path.join(TEMP_UPLOAD_DIR, file);
-      try {
-        if (now - fs.statSync(filePath).mtimeMs > MAX_AGE_MS) {
-          fs.unlinkSync(filePath);
-          logger.info("[cleanupTempFiles] Removed:", file);
-        }
-      } catch {}
-    }
-  } catch (err) {
-    logger.warn("[cleanupTempFiles] Error:", err.message);
-  }
-};
-
-cleanupTempFiles();
-setInterval(cleanupTempFiles, 6 * 60 * 60 * 1000).unref();
-
-const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"];
+scheduleTempCleanup(TEMP_UPLOAD_DIR, "mods");
 
 // diskStorage streams directly to disk — avoids loading large files into RAM
 const storage = multer.diskStorage({
@@ -66,18 +47,8 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const fileName = file.originalname.toLowerCase();
-  const ext = path.extname(fileName);
-
-  if (fileName.endsWith(".tar.gz") || fileName.endsWith(".tgz")) {
-    return cb(null, true);
-  }
-
-  if (!allowedExtensions.includes(ext)) {
-    return cb(
-      new Error("Only .zip, .7z, .rar, .tar, .tar.gz, .tgz files are allowed."),
-      false,
-    );
+  if (!hasAllowedArchiveExtension(file.originalname)) {
+    return cb(new Error("Only compressed archive files are allowed."), false);
   }
   cb(null, true);
 };

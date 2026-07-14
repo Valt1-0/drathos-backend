@@ -1,6 +1,20 @@
 import path from "path";
 import fs from "fs";
 
+// Single source of truth for accepted archive uploads — the multer filters,
+// validateFileName and validateMagicBytes must stay in sync.
+export const ALLOWED_ARCHIVE_EXTENSIONS = [
+  ".zip", ".7z", ".rar", ".tar",
+  ".gz", ".tgz", ".tar.gz",
+  ".bz2", ".tbz2", ".tar.bz2",
+  ".xz", ".txz", ".tar.xz",
+];
+
+export function hasAllowedArchiveExtension(filename) {
+  const lower = filename.toLowerCase();
+  return ALLOWED_ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 export function sanitizePath(basePath, userPath) {
   // Resolve symlinks on the base directory (must already exist)
   const resolvedBase = fs.realpathSync(path.resolve(basePath));
@@ -42,11 +56,7 @@ export function validateFileName(filename) {
     throw new Error("Invalid filename: path separators not allowed");
   }
 
-  const allowedExtensions = [".zip", ".7z", ".rar", ".tar", ".gz", ".tar.gz", ".tar.bz2"];
-  const lowerFilename = filename.toLowerCase();
-  const hasAllowedExtension = allowedExtensions.some((ext) => lowerFilename.endsWith(ext));
-
-  if (!hasAllowedExtension) {
+  if (!hasAllowedArchiveExtension(filename)) {
     const ext = path.extname(filename).toLowerCase();
     throw new Error(`Disallowed extension: ${ext}`);
   }
