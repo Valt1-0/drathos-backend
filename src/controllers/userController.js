@@ -149,7 +149,13 @@ export const register = async (req, res) => {
 
   let claimedInvite = null;
   try {
-    if (await User.exists({ username })) {
+    // Case-insensitive: the unique index is case-sensitive, so without this
+    // "Bob" and "bob" would become two distinct accounts
+    const existing = await User.findOne({ username })
+      .collation({ locale: "en", strength: 2 })
+      .select("_id")
+      .lean();
+    if (existing) {
       return res
         .status(400)
         .json({ error: true, message: "User already exists" });
@@ -234,7 +240,7 @@ export const login = async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await User.findOne({ username }).select("+refreshTokenHash +refreshTokenExpiresAt");
+    const user = await User.findOne({ username }).select("+password +refreshTokenHash +refreshTokenExpiresAt");
     if (!user || !(await user.matchPassword(password))) {
       return res.status(400).json({ error: true, message: "Invalid credentials" });
     }

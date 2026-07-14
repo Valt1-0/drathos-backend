@@ -14,15 +14,17 @@ const UserSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, "Password is required"],
+      select: false,
       validate: {
         validator: (v) => v.length >= PASSWORD_MIN_LENGTH && PASSWORD_REGEX.test(v),
         message: "Password must be at least 8 characters and include uppercase, lowercase, digit and special character (@$!%*?&).",
       },
     },
+    // null → the UI renders initials; never hotlink a third-party image
+    // (blocked by the app's production CSP anyway)
     profilePicture: {
       type: String,
-      default:
-        "https://e7.pngegg.com/pngimages/84/165/png-clipart-united-states-avatar-organization-information-user-avatar-service-computer-wallpaper-thumbnail.png",
+      default: null,
     },
     role: {
       type: String,
