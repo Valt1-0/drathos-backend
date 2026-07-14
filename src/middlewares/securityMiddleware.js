@@ -17,7 +17,6 @@ const getAllowedOrigins = () => {
 export const corsConfig = cors({
   origin: (origin, callback) => {
     const allowedOrigins = getAllowedOrigins();
-    const strictMode = process.env.CORS_STRICT_MODE === "true";
 
     if (allowedOrigins === "*") {
       return callback(null, true);
@@ -49,10 +48,6 @@ export const corsConfig = cors({
 
     if (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)) {
       return callback(null, true);
-    }
-
-    if (strictMode) {
-      return callback(new Error("Not allowed by CORS"));
     }
 
     return callback(new Error("Not allowed by CORS"));
