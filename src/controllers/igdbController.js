@@ -114,6 +114,48 @@ export const searchGames = async (req, res) => {
   }
 };
 
+export const getScreenshots = async (req, res) => {
+  try {
+    const igdbId = Number.parseInt(req.params.igdbId, 10);
+    if (!Number.isInteger(igdbId) || igdbId <= 0) {
+      return res.status(400).json({ error: "Invalid IGDB id." });
+    }
+
+    const cacheKey = `screenshots:${igdbId}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
+    const token = await getToken();
+
+    const igdbRes = await fetchWithTimeout("https://api.igdb.com/v4/screenshots", {
+      method: "POST",
+      headers: {
+        "Client-ID": process.env.TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "text/plain",
+      },
+      body: `fields image_id; where game = ${igdbId}; limit 8;`,
+    });
+
+    if (!igdbRes.ok) {
+      logger.error("IGDB screenshots error:", igdbRes.status, igdbRes.statusText);
+      return res.status(igdbRes.status).json({ error: "Failed to fetch from IGDB" });
+    }
+
+    const data = await igdbRes.json();
+    const screenshots = (Array.isArray(data) ? data : [])
+      .filter((s) => s.image_id)
+      .map((s) => `https://images.igdb.com/igdb/image/upload/t_1080p/${s.image_id}.jpg`);
+
+    const payload = { screenshots };
+    setCache(cacheKey, payload);
+    res.json(payload);
+  } catch (err) {
+    logger.error("Error fetching screenshots:", err);
+    res.status(500).json({ error: "Server error while fetching screenshots" });
+  }
+};
+
 export const fetchGameDetails = async (igdbId) => {
   const cacheKey = `game:${igdbId}`;
   const cached = getCached(cacheKey);
